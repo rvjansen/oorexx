@@ -120,13 +120,6 @@ else ()
     message(STATUS "OOREXX_SHEBANG_PROGRAM: \"${OOREXX_SHEBANG_PROGRAM}\" (default)")
 endif()
 
-find_package(Subversion)
-if(SUBVERSION_FOUND)
-  set(ORX_WC_REVISION 0)
-  Subversion_WC_INFO(${PROJECT_SOURCE_DIR} ORX)
-  set(ORX_BLD_LVL ${ORX_WC_REVISION})
-endif()
-message(STATUS "SVN Revision Number is ${ORX_BLD_LVL}")
 
 if (WIN32)
 # find a xalan executable, but only on windows for now.
