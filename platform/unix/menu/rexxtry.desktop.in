@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=RexxTry
+Exec=@CMAKE_INSTALL_PREFIX@/bin/rexxtry.rex
+Icon=oorexx
+Terminal=true
+Type=Application
+Categories=Development;Debugger;
+MimeType=application/x-ooRexx-item;
+GenericName=RexxTry

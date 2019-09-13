@@ -1,0 +1,142 @@
+<section id="rxsubcomup">
+<title>RXSUBCOM Utility Program</title>
+<para>RXSUBCOM issues the following errors:</para>
+
+<section id="ERR116">
+<title>Error 116 - The RXSUBCOM parameter REGISTER is incorrect.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>RXSUBCOM REGISTER requires the following parameters:
+            <variablelist>
+                <title>RXSUBCOM REGISTER Environment_Name Dll_Name Procedure_Name</title>
+                <varlistentry>
+                    <term>
+                        Environment_Name
+                    </term>
+                    <listitem>
+                        <para>
+                        is the name of the subcommand handler.
+                        </para>
+                    </listitem>
+                </varlistentry>
+                <varlistentry>
+                    <term>
+            .           Dll_Name
+                    </term>
+                    <listitem>
+                        <para>
+                            is the name of the file containing the subcommand handler routine.
+                        </para>
+                    </listitem>
+                </varlistentry>
+                <varlistentry>
+                    <term>
+            .           Procedure_Name
+                    </term>
+                    <listitem>
+                        <para>
+                            is the name of the procedure that REXX calls as a subcommand handler.
+                        </para>
+                    </listitem>
+                </varlistentry>
+            </variablelist>
+        </para>
+</section>
+<section id="ERR117">
+<title>Error 117 - The RXSUBCOM parameter DROP is incorrect.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>RXSUBCOM DROP requires that the subcommand handler name be specified.
+           <variablelist>
+               <title>RXSUBCOM DROP Environment_Name [Dll_Name]</title>
+               <varlistentry>
+                   <term>
+                       Environment_Name
+                   </term>
+                   <listitem>
+                       <para>
+                       is the name of the subcommand handler.
+                       </para>
+                   </listitem>
+               </varlistentry>
+               <varlistentry>
+                   <term>
+           .           Dll_Name
+                   </term>
+                   <listitem>
+                       <para>
+                           is the name of the file containing the subcommand
+                           handler routine (optional).
+                       </para>
+                   </listitem>
+               </varlistentry>
+           </variablelist>
+        </para>
+</section>
+<section id="ERR118">
+<title>Error 118 - The RXSUBCOM parameter LOAD is incorrect.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>RXSUBCOM LOAD requires that the subcommand handler name be specified.
+            <variablelist>
+                <title>RXSUBCOM LOAD Environment_Name [Dll_Name]</title>
+                <varlistentry>
+                    <term>
+                        Environment_Name
+                    </term>
+                    <listitem>
+                        <para>
+                        is the name of the subcommand handler.
+                        </para>
+                    </listitem>
+                </varlistentry>
+                <varlistentry>
+                    <term>
+            .           Dll_Name
+                    </term>
+                    <listitem>
+                        <para>
+                            is the name of the file containing the subcommand
+                            handler routine (optional).
+                        </para>
+                    </listitem>
+                </varlistentry>
+            </variablelist>
+        </para>
+</section>
+<section id="ERR125">
+<title>Error 125 - The RXSUBCOM parameter QUERY is incorrect.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>RXSUBCOM QUERY requires the environment name be specified.
+            <variablelist>
+                <title>RXSUBCOM QUERY Environment_Name [Dll_Name]</title>
+                <varlistentry>
+                    <term>
+                        Environment_Name
+                    </term>
+                    <listitem>
+                        <para>
+                        is the name of the subcommand handler.
+                        </para>
+                    </listitem>
+                </varlistentry>
+                <varlistentry>
+                    <term>
+            .           Dll_Name
+                    </term>
+                    <listitem>
+                        <para>
+                            is the name of the file containing the subcommand
+                            handler routine (optional).
+                        </para>
+                    </listitem>
+                </varlistentry>
+            </variablelist>
+        </para>
+</section>
+</section>

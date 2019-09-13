@@ -1,0 +1,40 @@
+<section id="rexxcup">
+<title>RexxC Utility Program</title>
+<para>When RexxC encounters a syntax error in a Rexx program while tokenizing or syntax checking it, RexxC
+returns the negated ooRexx error code. In addition, RexxC issues the following errors:</para>
+<section id="ERR127">
+<title>Error 127 - The REXXC command parameters are incorrect.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>The REXXC utility was invoked with zero or more than three parameters.  REXXC accepts the following parameters:
+        <itemizedlist>
+        <listitem>
+<para>To check the syntax of a REXX program: REXXC Program_name [-s]</para>
+</listitem>
+        <listitem>
+<para>To convert a REXX program into a sourceless executable file: REXXC Program_name Output_file_name [-s]</para>
+</listitem>
+        <listitem>
+<para>The -s option will suppress the copyright banner.</para>
+</listitem>
+        </itemizedlist>
+        </para>
+</section>
+<section id="ERR128">
+<title>Error 128 - Output file name must be different from input file name.</title>
+<para> </para>
+</section>
+<section id="ERR129">
+<title>Error 129 - SYNTAX: REXXC InProgramName [OutProgramName] [/S].</title>
+<para> </para>
+</section>
+<section id="ERR130">
+<title>Error 130 - Without OutProgramName REXXC only performs a syntax check.</title>
+<para> </para>
+</section>
+<section id="ERR133">
+<title>Error 133 - SYNTAX: REXXC InProgramName [OutProgramName] [-s].</title>
+<para> </para>
+</section>
+</section>

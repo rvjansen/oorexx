@@ -1,0 +1,27 @@
+# Hashes of file build rules.
+c0f645dd86f0b7f47c97f4d3d0f036cf CMakeFiles/class_files
+c0f645dd86f0b7f47c97f4d3d0f036cf CMakeFiles/ncurses_cls
+c0f645dd86f0b7f47c97f4d3d0f036cf CMakeFiles/rexx_img
+c0f645dd86f0b7f47c97f4d3d0f036cf CMakeFiles/rexx_man
+c0f645dd86f0b7f47c97f4d3d0f036cf CMakeFiles/rexxc_man
+c0f645dd86f0b7f47c97f4d3d0f036cf CMakeFiles/rxqueue_man
+c0f645dd86f0b7f47c97f4d3d0f036cf CMakeFiles/rxsubcom_man
+17bad508b3d73fd96e2ef143c3ec623b bin/CoreClasses.orx
+7d014a1175a098a7e49d8035630e60e8 bin/PlatformObjects.orx
+ccba1c8ea4f83171afb2e6715524d664 bin/StreamClasses.orx
+e678c0a37051128e3b815ca428f28975 bin/csvStream.cls
+711844741d70375fd6e8cd0c52fc7aa7 bin/dateparser.cls
+dea0c187e3219248644418e83310a8af bin/json.cls
+84ac732dbd74e6503d76499d7e299bc8 bin/mime.cls
+486ac0de338a1145697e5a7c96ca514f bin/ncurses.cls
+1865b70e13f0a27c431a07161c6ac8b1 bin/rexx.img
+0fe1135f48cc48f5265a4440634eaa05 bin/rxftp.cls
+3bb149a59a91d82f3d61c10a528c22c2 bin/rxregexp.cls
+6d0521da66768e485874acc287ce6005 bin/smtp.cls
+bbe352347817b1cca6e28b4badc8bb56 bin/socket.cls
+2d41b29b53a368a069ec9f17bfd71007 bin/streamsocket.cls
+6b6a63ea789893289d8ea53a726bf135 lib/rexx.img
+d63b160a86d2cc0ca950a3848ca15bed rexx.1.gz
+513f068933ac4af80387fb5dcd86a319 rexxc.1.gz
+0095984d1234e4c079e354950e5f2efd rxqueue.1.gz
+ffb5bc70c78c44f02e52bb1fa944ccaa rxsubcom.1.gz

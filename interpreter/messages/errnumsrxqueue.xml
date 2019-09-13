@@ -1,0 +1,57 @@
+<section id="rxqueueup">
+<title>RXQUEUE Utility Program</title>
+<para>RXQUEUE issues the following errors:</para>
+<section id="ERR119">
+<title>Error 119 - The REXX rxapi queuing system is not available.</title>
+<para> </para>
+</section>
+<section id="ERR120">
+<title>Error 120 - The size of the data is incorrect.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>The data supplied to the RXQUEUE command is too long. The RXQUEUE program accepts data records containing 0 - 65472 bytes.  A record exceeded the allowable limits.</para>
+</section>
+<section id="ERR121">
+<title>Error 121 - Storage for data queues is exhausted.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>The queuing system is out of memory.  No more storage is available to store queued data.</para>
+</section>
+<section id="ERR122">
+<title>Error 122 - The name %1 is not a valid queue name.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>The queue name contains an invalid character.
+        Only the following characters can appear in queue names:  </para>
+<programlisting>
+        
+           'A' .. 'Z', '0' .. '9', '.', '!', '?', '_'
+        
+        </programlisting>
+</section>
+<section id="ERR123">
+<title>Error 123 - The queue access mode is not correct.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>An internal error occurred in RXQUEUE. The RXQUEUE program tried to access a queue with an incorrect access mode. Correct access modes are LIFO and FIFO.</para>
+</section>
+<section id="ERR124">
+<title>Error 124 - The queue %1 does not exist.</title>
+<para>
+<emphasis role="bold">Explanation:</emphasis>
+</para>
+<para>The command attempted to access a nonexistent queue.</para>
+</section>
+<section id="ERR131">
+<title>Error 131 - The syntax of the command is incorrect.</title>
+<para> </para>
+</section>
+<section id="ERR132">
+<title>Error 132 - System error occurred while processing the command.</title>
+<para> </para>
+</section>
+</section>

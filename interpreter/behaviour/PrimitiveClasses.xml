@@ -1,0 +1,261 @@
+<!--
+This file contains all of the class definitions for ooRexx classes that are allocated
+and managed via the garbage collector. When this file is updated, cmake will update the
+various header files used for class definitions as well as generate the C++ source files
+that compile to class tables. The fields have the following meanings:
+
+Exported - These are classes that can be accessed and manipulated by ooRexx programmers
+(String, Array, etc.)
+
+Internal - The internal classes are only used in the internals of the interpreter.  Internal
+classes may also be part of the persistent rexx image file or part of the compiled image
+of a program.
+
+Transient - Classes that are used at runtime but are never saved as part of the image.  These
+classes record current interpreter state, such as the runtime stack or the activity instances.
+
+NOTE:  Order is very important within the categories.  To maintain image compatibility, new
+classes must be added to the end of their specific category.
+
+Fields within the class definitions are:
+
+id - A symbolic id of the class.  This is a simple name that is used to generate identifiers
+within code.
+
+class - The actual C++ class name of the class.
+
+include - The name of the include file that defines this class.
+
+classclass - Some classes have a separate class object C++ definition.  If this exists, specify
+the C++ name of the class definition.
+
+operators - Some classes have special optimazations for the operator methods (String, Integer, etc.).
+If the class has its own operator table, specify operators with a value of true.
+-->
+
+<RexxClasses>
+<CopyRight>
+Copyright (c) 2007 Rexx Language Association. All rights reserved.
+
+This program and the accompanying materials are made available under
+the terms of the Common Public License v1.0 which accompanies this
+distribution. A copy is also available at the following address:
+http://www.ibm.com/developerworks/oss/CPLv1.0.htm
+
+Redistribution and use in source and binary forms, with or
+without modification, are permitted provided that the following
+conditions are met:
+
+Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in
+the documentation and/or other materials provided with the distribution.
+
+Neither the name of Rexx Language Association nor the names
+of its contributors may be used to endorse or promote products
+derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+</CopyRight>
+<Classes>
+<Exported>
+<Class id="Object" class="RexxObject" include="ObjectClass.hpp"/>
+<Class id="Class" class="RexxClass" include="ClassClass.hpp"/>
+<Class id="Array" class="ArrayClass" include="ArrayClass.hpp"/>
+<Class id="Directory" class="DirectoryClass" include="DirectoryClass.hpp"/>
+<Class id="Integer" class="RexxInteger" classclass="RexxIntegerClass" operators="true" include="IntegerClass.hpp"/>
+<Class id="List" class="ListClass" include="ListClass.hpp"/>
+<Class id="Message" class="MessageClass" include="MessageClass.hpp"/>
+<Class id="Method" class="MethodClass" include="MethodClass.hpp"/>
+<Class id="NumberString" class="NumberString" operators="true" include="NumberStringClass.hpp"/>
+<Class id="Queue" class="QueueClass" include="QueueClass.hpp"/>
+<Class id="Stem" class="StemClass" include="StemClass.hpp"/>
+<Class id="String" class="RexxString" operators="true" include="StringClass.hpp"/>
+<Class id="Supplier" class="SupplierClass" include="SupplierClass.hpp"/>
+<Class id="Table" class="TableClass" include="TableClass.hpp"/>
+<Class id="StringTable" class="StringTable" include="StringTableClass.hpp"/>
+<Class id="Relation" class="RelationClass" include="RelationClass.hpp"/>
+<Class id="MutableBuffer" class="MutableBuffer" include="MutableBufferClass.hpp"/>
+<Class id="Pointer" class="PointerClass" include="PointerClass.hpp"/>
+<Class id="Buffer" class="BufferClass" include="BufferClass.hpp"/>
+<Class id="WeakReference" class="WeakReference" include="WeakReferenceClass.hpp"/>
+<Class id="Routine" class="RoutineClass" include="RoutineClass.hpp"/>
+<Class id="Package" class="PackageClass" include="PackageClass.hpp"/>
+<Class id="RexxContext" class="RexxContext" include="ContextClass.hpp"/>
+<Class id="IdentityTable" class="IdentityTable" include="IdentityTableClass.hpp"/>
+<Class id="StackFrame" class="StackFrameClass" include="StackFrameClass.hpp"/>
+<Class id="Set" class="SetClass" include="SetClass.hpp"/>
+<Class id="Bag" class="BagClass" include="BagClass.hpp"/>
+<Class id="RexxInfo" class="RexxInfo" include="RexxInfoClass.hpp"/>
+<Class id="VariableReference" class="VariableReference" include="VariableReference.hpp"/>
+<Class id="EventSemaphore" class="EventSemaphoreClass" include="EventSemaphore.hpp"/>
+<Class id="MutexSemaphore" class="MutexSemaphoreClass" include="MutexSemaphore.hpp"/>
+</Exported>
+<Internal>
+<Class id="NilObject" class="RexxNilObject" include="ObjectClass.hpp"/>
+<Class id="Behaviour" class="RexxBehaviour" include="RexxBehaviour.hpp"/>
+<Class id="MethodDictionary" class="MethodDictionary" include="MethodDictionary.hpp"/>
+<Class id="LibraryPackage" class="LibraryPackage" include="LibraryPackage.hpp"/>
+<Class id="RexxCode" class="RexxCode" include="RexxCode.hpp"/>
+<Class id="NativeMethod" class="NativeMethod" include="NativeCode.hpp"/>
+<Class id="NativeRoutine" class="NativeRoutine" include="NativeCode.hpp"/>
+<Class id="RegisteredRoutine" class="RegisteredRoutine" include="NativeCode.hpp"/>
+<Class id="CPPCode" class="CPPCode" include="CPPCode.hpp"/>
+<Class id="AttributeGetterCode" class="AttributeGetterCode" include="CPPCode.hpp"/>
+<Class id="AttributeSetterCode" class="AttributeSetterCode" include="CPPCode.hpp"/>
+<Class id="ConstantGetterCode" class="ConstantGetterCode" include="CPPCode.hpp"/>
+<Class id="AbstractCode" class="AbstractCode" include="CPPCode.hpp"/>
+<Class id="DelegateCode" class="DelegateCode" include="CPPCode.hpp"/>
+
+<Class id="SmartBuffer" class="SmartBuffer" include="SmartBuffer.hpp"/>
+<Class id="IdentityHashContents" class="IdentityHashContents" include="HashContents.hpp"/>
+<Class id="EqualityHashContents" class="EqualityHashContents" include="HashContents.hpp"/>
+<Class id="MultiValueContents" class="MultiValueContents" include="HashContents.hpp"/>
+<Class id="StringHashContents" class="StringHashContents" include="HashContents.hpp"/>
+<Class id="ListContents" class="ListContents" include="ListContents.hpp"/>
+
+<Class id="Variable" class="RexxVariable" include="RexxVariable.hpp"/>
+<Class id="VariableDictionary" class="VariableDictionary" include="VariableDictionary.hpp"/>
+<Class id="VariableTerm" class="RexxSimpleVariable" include="ExpressionVariable.hpp"/>
+<Class id="CompoundVariableTerm" class="RexxCompoundVariable" include="ExpressionCompoundVariable.hpp"/>
+<Class id="StemVariableTerm" class="RexxStemVariable" include="ExpressionStem.hpp"/>
+<Class id="DotVariableTerm" class="RexxDotVariable" include="ExpressionDotVariable.hpp"/>
+<Class id="IndirectVariableTerm" class="RexxVariableReference" include="IndirectVariableReference.hpp"/>
+<Class id="FunctionCallTerm" class="RexxExpressionFunction" include="ExpressionFunction.hpp"/>
+<Class id="MessageSendTerm" class="RexxExpressionMessage" include="ExpressionMessage.hpp"/>
+<Class id="UnaryOperatorTerm" class="RexxUnaryOperator" include="ExpressionOperator.hpp"/>
+<Class id="BinaryOperatorTerm" class="RexxBinaryOperator" include="ExpressionOperator.hpp"/>
+<Class id="LogicalTerm" class="RexxExpressionLogical" include="ExpressionLogical.hpp"/>
+<Class id="ListTerm" class="RexxExpressionList" include="ExpressionList.hpp"/>
+
+<Class id="Instruction" class="RexxInstruction" include="RexxInstruction.hpp"/>
+<Class id="AddressInstruction" class="RexxInstructionAddress" include="AddressInstruction.hpp"/>
+<Class id="AssignmentInstruction" class="RexxInstructionAssignment" include="AssignmentInstruction.hpp"/>
+<Class id="CallInstruction" class="RexxInstructionCall" include="CallInstruction.hpp"/>
+<Class id="DynamicCallInstruction" class="RexxInstructionDynamicCall" include="CallInstruction.hpp"/>
+<Class id="QualifiedCallInstruction" class="RexxInstructionQualifiedCall" include="CallInstruction.hpp"/>
+<Class id="CallOnInstruction" class="RexxInstructionCallOn" include="CallInstruction.hpp"/>
+<Class id="CommandInstruction" class="RexxInstructionCommand" include="CommandInstruction.hpp"/>
+<Class id="SimpleDoInstruction" class="RexxInstructionSimpleDo" include="DoInstruction.hpp"/>
+<Class id="DoForeverInstruction" class="RexxInstructionDoForever" include="DoInstruction.hpp"/>
+<Class id="DoOverInstruction" class="RexxInstructionDoOver" include="DoInstruction.hpp"/>
+<Class id="DoOverUntilInstruction" class="RexxInstructionDoOverUntil" include="DoInstruction.hpp"/>
+<Class id="DoOverWhileInstruction" class="RexxInstructionDoOverWhile" include="DoInstruction.hpp"/>
+<Class id="DoOverForInstruction" class="RexxInstructionDoOverFor" include="DoInstruction.hpp"/>
+<Class id="DoOverForUntilInstruction" class="RexxInstructionDoOverForUntil" include="DoInstruction.hpp"/>
+<Class id="DoOverForWhileInstruction" class="RexxInstructionDoOverForWhile" include="DoInstruction.hpp"/>
+<Class id="ControlledDoInstruction" class="RexxInstructionControlledDo" include="DoInstruction.hpp"/>
+<Class id="ControlledDoUntilInstruction" class="RexxInstructionControlledDoUntil" include="DoInstruction.hpp"/>
+<Class id="ControlledDoWhileInstruction" class="RexxInstructionControlledDoWhile" include="DoInstruction.hpp"/>
+<Class id="DoWhileInstruction" class="RexxInstructionDoWhile" include="DoInstruction.hpp"/>
+<Class id="DoUntilInstruction" class="RexxInstructionDoUntil" include="DoInstruction.hpp"/>
+<Class id="DoCountInstruction" class="RexxInstructionDoCount" include="DoInstruction.hpp"/>
+<Class id="DoCountUntilInstruction" class="RexxInstructionDoCountUntil" include="DoInstruction.hpp"/>
+<Class id="DoCountWhileInstruction" class="RexxInstructionDoCountWhile" include="DoInstruction.hpp"/>
+<Class id="DropInstruction" class="RexxInstructionDrop" include="DropInstruction.hpp"/>
+<Class id="ElseInstruction" class="RexxInstructionElse" include="ElseInstruction.hpp"/>
+<Class id="EndInstruction" class="RexxInstructionEnd" include="EndInstruction.hpp"/>
+<Class id="EndIfInstruction" class="RexxInstructionEndIf" include="EndIf.hpp"/>
+<Class id="ExitInstruction" class="RexxInstructionExit" include="ExitInstruction.hpp"/>
+<Class id="ExposeInstruction" class="RexxInstructionExpose" include="ExposeInstruction.hpp"/>
+<Class id="ForwardInstruction" class="RexxInstructionForward" include="ForwardInstruction.hpp"/>
+<Class id="GuardInstruction" class="RexxInstructionGuard" include="GuardInstruction.hpp"/>
+<Class id="IfInstruction" class="RexxInstructionIf" include="IfInstruction.hpp"/>
+<Class id="CaseWhenInstruction" class="RexxInstructionCaseWhen" include="WhenCaseInstruction.hpp"/>
+<Class id="InterpretInstruction" class="RexxInstructionInterpret" include="InterpretInstruction.hpp"/>
+<Class id="LabelInstruction" class="RexxInstructionLabel" include="LabelInstruction.hpp"/>
+<Class id="LeaveInstruction" class="RexxInstructionLeave" include="LeaveInstruction.hpp"/>
+<Class id="MessageInstruction" class="RexxInstructionMessage" include="MessageInstruction.hpp"/>
+<Class id="NopInstruction" class="RexxInstructionNop" include="NopInstruction.hpp"/>
+<Class id="NumericInstruction" class="RexxInstructionNumeric" include="NumericInstruction.hpp"/>
+<Class id="OptionsInstruction" class="RexxInstructionOptions" include="OptionsInstruction.hpp"/>
+<Class id="OtherwiseInstruction" class="RexxInstructionOtherwise" include="OtherwiseInstruction.hpp"/>
+<Class id="ParseInstruction" class="RexxInstructionParse" include="ParseInstruction.hpp"/>
+<Class id="ProcedureInstruction" class="RexxInstructionProcedure" include="ProcedureInstruction.hpp"/>
+<Class id="QueueInstruction" class="RexxInstructionQueue" include="QueueInstruction.hpp"/>
+<Class id="RaiseInstruction" class="RexxInstructionRaise" include="RaiseInstruction.hpp"/>
+<Class id="ReplyInstruction" class="RexxInstructionReply" include="ReplyInstruction.hpp"/>
+<Class id="ReturnInstruction" class="RexxInstructionReturn" include="ReturnInstruction.hpp"/>
+<Class id="SayInstruction" class="RexxInstructionSay" include="SayInstruction.hpp"/>
+<Class id="SelectInstruction" class="RexxInstructionSelect" include="SelectInstruction.hpp"/>
+<Class id="SelectCaseInstruction" class="RexxInstructionSelectCase" include="SelectInstruction.hpp"/>
+<Class id="SignalInstruction" class="RexxInstructionSignal" include="SignalInstruction.hpp"/>
+<Class id="DynamicSignalInstruction" class="RexxInstructionDynamicSignal" include="SignalInstruction.hpp"/>
+<Class id="SignalOnInstruction" class="RexxInstructionSignalOn" include="SignalInstruction.hpp"/>
+<Class id="ThenInstruction" class="RexxInstructionThen" include="ThenInstruction.hpp"/>
+<Class id="TraceInstruction" class="RexxInstructionTrace" include="TraceInstruction.hpp"/>
+<Class id="UseInstruction" class="RexxInstructionUse" include="UseInstruction.hpp"/>
+<Class id="UseLocalInstruction" class="RexxInstructionUseLocal" include="UseLocalInstruction.hpp"/>
+<Class id="DoWithInstruction" class="RexxInstructionDoWith" include="DoInstruction.hpp"/>
+<Class id="DoWithUntilInstruction" class="RexxInstructionDoWithUntil" include="DoInstruction.hpp"/>
+<Class id="DoWithWhileInstruction" class="RexxInstructionDoWithWhile" include="DoInstruction.hpp"/>
+<Class id="DoWithForInstruction" class="RexxInstructionDoWithFor" include="DoInstruction.hpp"/>
+<Class id="DoWithForUntilInstruction" class="RexxInstructionDoWithForUntil" include="DoInstruction.hpp"/>
+<Class id="DoWithForWhileInstruction" class="RexxInstructionDoWithForWhile" include="DoInstruction.hpp"/>
+
+<Class id="ClassDirective" class="ClassDirective" include="ClassDirective.hpp"/>
+<Class id="LibraryDirective" class="LibraryDirective" include="LibraryDirective.hpp"/>
+<Class id="RequiresDirective" class="RequiresDirective" include="RequiresDirective.hpp"/>
+
+<Class id="CompoundElement" class="CompoundTableElement" include="CompoundTableElement.hpp"/>
+<Class id="ParseTrigger" class="ParseTrigger" include="ParseTrigger.hpp"/>
+<Class id="ProgramSource" class="ProgramSource" include="ProgramSource.hpp"/>
+<Class id="ArrayProgramSource" class="ArrayProgramSource" include="ProgramSource.hpp"/>
+<Class id="BufferProgramSource" class="BufferProgramSource" include="ProgramSource.hpp"/>
+<Class id="FileProgramSource" class="FileProgramSource" include="ProgramSource.hpp"/>
+<Class id="NumberArray" class="NumberArray" include="NumberArray.hpp"/>
+<Class id="ClassResolver" class="ClassResolver" include="ExpressionClassResolver.hpp"/>
+<Class id="QualifiedFunction" class="QualifiedFunction" include="ExpressionQualifiedFunction.hpp"/>
+<Class id="PointerBucket" class="PointerBucket" include="PointerBucket.hpp"/>
+<Class id="PointerTable" class="PointerTable" include="PointerTable.hpp"/>
+<Class id="SpecialDotVariableTerm" class="SpecialDotVariable" include="SpecialDotVariable.hpp"/>
+<Class id="VariableReferenceOp" class="VariableReferenceOp" include="VariableReferenceOp.hpp"/>
+<Class id="UseArgVariableRef" class="UseArgVariableRef" include="UseArgVariableRef.hpp"/>
+<Class id="CommandIOConfiguration" class="CommandIOConfiguration" include="CommandIOConfiguration.hpp"/>
+<Class id="AddressWithInstruction" class="RexxInstructionAddressWith" include="AddressWithInstruction.hpp"/>
+<Class id="ConstantDirective" class="ConstantDirective" include="ConstantDirective.hpp"/>
+</Internal>
+<Transient>
+<Class id="Memory" class="MemoryObject" include="RexxMemory.hpp" objectvirtual="true"/>
+<Class id="InternalStack" class="InternalStack" include="InternalStack.hpp"/>
+<Class id="PushThroughStack" class="PushThroughStack" include="MemoryStack.hpp"/>
+<Class id="Activity" class="Activity" include="Activity.hpp"/>
+<Class id="Activation" class="RexxActivation" include="RexxActivation.hpp"/>
+<Class id="NativeActivation" class="NativeActivation" include="NativeActivation.hpp"/>
+<Class id="ActivationFrameBuffer" class="ActivationFrameBuffer" include="ActivationStack.hpp"/>
+<Class id="Envelope" class="Envelope" include="Envelope.hpp"/>
+<Class id="LanguageParser" class="LanguageParser" include="LanguageParser.hpp"/>
+<Class id="Clause" class="RexxClause" include="Clause.hpp"/>
+<Class id="Token" class="RexxToken" include="Token.hpp"/>
+<Class id="DoBlock" class="DoBlock" include="DoBlock.hpp"/>
+<Class id="InterpreterInstance" class="InterpreterInstance" include="InterpreterInstance.hpp"/>
+<Class id="SecurityManager" class="SecurityManager" include="SecurityManager.hpp"/>
+<Class id="CommandHandler" class="CommandHandler" include="CommandHandler.hpp"/>
+<Class id="MapBucket" class="MapBucket" include="MapBucket.hpp"/>
+<Class id="MapTable" class="MapTable" include="MapTable.hpp"/>
+<Class id="TrapHandler" class="TrapHandler" include="TrapHandler.hpp"/>
+<Class id="CommandIOContext" class="CommandIOContext" include="CommandIOContext.hpp"/>
+<Class id="StemOutputTarget" class="StemOutputTarget" include="OutputRedirector.hpp"/>
+<Class id="StreamObjectOutputTarget" class="StreamObjectOutputTarget" include="OutputRedirector.hpp"/>
+<Class id="StreamOutputTarget" class="StreamOutputTarget" include="OutputRedirector.hpp"/>
+<Class id="CollectionOutputTarget" class="CollectionOutputTarget" include="OutputRedirector.hpp"/>
+<Class id="BufferingOutputTarget" class="BufferingOutputTarget" include="OutputRedirector.hpp"/>
+<Class id="StemInputSource" class="StemInputSource" include="InputRedirector.hpp"/>
+<Class id="StreamObjectInputSource" class="StreamObjectInputSource" include="InputRedirector.hpp"/>
+<Class id="StreamInputSource" class="StreamInputSource" include="InputRedirector.hpp"/>
+<Class id="ArrayInputSource" class="ArrayInputSource" include="InputRedirector.hpp"/>
+<Class id="RexxQueueOutputTarget" class="RexxQueueOutputTarget" include="OutputRedirector.hpp"/>
+</Transient>
+</Classes>
+</RexxClasses>

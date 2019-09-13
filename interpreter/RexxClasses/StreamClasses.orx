@@ -1,0 +1,884 @@
+/*----------------------------------------------------------------------------*/
+/*                                                                            */
+/* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
+/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/*                                                                            */
+/* This program and the accompanying materials are made available under       */
+/* the terms of the Common Public License v1.0 which accompanies this         */
+/* distribution. A copy is also available at the following address:           */
+/* http://www.oorexx.org/license.html                                         */
+/*                                                                            */
+/* Redistribution and use in source and binary forms, with or                 */
+/* without modification, are permitted provided that the following            */
+/* conditions are met:                                                        */
+/*                                                                            */
+/* Redistributions of source code must retain the above copyright             */
+/* notice, this list of conditions and the following disclaimer.              */
+/* Redistributions in binary form must reproduce the above copyright          */
+/* notice, this list of conditions and the following disclaimer in            */
+/* the documentation and/or other materials provided with the distribution.   */
+/*                                                                            */
+/* Neither the name of Rexx Language Association nor the names                */
+/* of its contributors may be used to endorse or promote products             */
+/* derived from this software without specific prior written permission.      */
+/*                                                                            */
+/* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS        */
+/* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT          */
+/* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS          */
+/* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT   */
+/* OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,      */
+/* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED   */
+/* TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,        */
+/* OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY     */
+/* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING    */
+/* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS         */
+/* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.               */
+/*                                                                            */
+/*----------------------------------------------------------------------------*/
+
+use arg rexxPackage
+
+-- add all of the public classes to .environment and to the
+-- REXX package
+publicClasses = .context~package~publicClasses
+
+do name over publicClasses
+   class = publicClasses[name]
+   .environment~put(class, name)
+   rexxPackage~addPublicClass(name, class)
+end
+
+
+
+-- mixin class objects used for stream types
+::CLASS 'OutputStream' public MIXINCLASS Object
+
+::method charout abstract     -- the input methods must be implemented
+::method lineout abstract
+
+::method open    -- by default, these exist as nops
+::method close
+
+::method arrayOut
+  use strict arg lines
+
+  do line over lines
+      self~lineout(line)
+  end
+
+::method linein
+  raise syntax 93.963 -- not supported
+
+::method lines
+  raise syntax 93.963  -- not supported
+
+::method charin
+  raise syntax 93.963  -- not supported
+
+::method chars
+  raise syntax 93.963  -- not supported
+
+::method position
+  raise syntax 93.963  -- not supported
+
+
+::CLASS 'InputStream' public MIXINCLASS Object
+::method charout
+  raise syntax 93.963  -- not supported
+::method lineout
+  raise syntax 93.963  -- not supported
+
+::method open           -- nop operations by default
+::method close
+
+::method linein abstract   -- These are abstract and must be implemented
+::method lines  abstract
+::method charin abstract
+::method chars  abstract
+
+::method position
+  raise syntax 93.963  -- not supported by default...this is optional
+
+::method arrayIn
+  array = .array~new
+
+  signal on notready
+
+  do forever
+      array~append(self~linein)
+  end
+
+notready:
+  return array
+
+
+::CLASS 'InputOutputStream' public MIXINCLASS Object INHERIT InputStream OutputStream
+
+/***************************************************/
+/* Create the stream class                         */
+/***************************************************/
+
+::CLASS 'Stream' public MIXINCLASS InputOutputStream
+
+/******************************************************/
+/* init method for setup on stream instance           */
+/******************************************************/
+
+::METHOD !c_stream_init          EXTERNAL 'LIBRARY REXX stream_init'
+::METHOD chars                   EXTERNAL 'LIBRARY REXX stream_chars'
+::METHOD lines                   EXTERNAL 'LIBRARY REXX stream_lines'
+::METHOD position                EXTERNAL 'LIBRARY REXX stream_position'
+::METHOD seek                    EXTERNAL 'LIBRARY REXX stream_position'
+::METHOD state                   EXTERNAL 'LIBRARY REXX stream_state'
+::METHOD description             EXTERNAL 'LIBRARY REXX stream_description'
+::METHOD !query_position         EXTERNAL 'LIBRARY REXX stream_query_position'
+::METHOD charout                 EXTERNAL 'LIBRARY REXX stream_charout'
+::METHOD charin                  EXTERNAL 'LIBRARY REXX stream_charin'
+::METHOD linein                  EXTERNAL 'LIBRARY REXX stream_linein'
+::METHOD lineout                 EXTERNAL 'LIBRARY REXX stream_lineout'
+::METHOD qualify                 EXTERNAL 'LIBRARY REXX qualify'
+::METHOD !query_exists           EXTERNAL 'LIBRARY REXX query_exists'
+::METHOD !query_size             EXTERNAL 'LIBRARY REXX query_size'
+::METHOD !query_time             EXTERNAL 'LIBRARY REXX query_time'
+::METHOD !handle_set             EXTERNAL 'LIBRARY REXX handle_set'
+::METHOD !std_set                EXTERNAL 'LIBRARY REXX std_set'
+::METHOD flush                   EXTERNAL 'LIBRARY REXX stream_flush'
+::METHOD !query_handle           EXTERNAL 'LIBRARY REXX query_handle'
+::METHOD !query_streamtype       EXTERNAL 'LIBRARY REXX query_streamtype'
+
+::METHOD string                        /* string method                     */
+  expose stream_name                   /* get the stream name               */
+  use strict arg
+  return stream_name                   /* use it as the string value        */
+
+::METHOD  init                         /* standard init method              */
+                                       /* access general stream state       */
+  expose stream_name
+  use strict arg stream_name         /* get the stream name               */
+  if stream_name~isA(.File) then     -- if source is a file object, use the path name of the file
+      stream_name = stream_name~absolutePath
+
+                                     /* get as a string                   */
+  stream_name = stream_name~request('STRING')
+  if stream_name~isNil then          /* not a real string value?          */
+    raise syntax 93.938 array (1)    /* this is an error                  */
+  self~!c_stream_init(stream_name)   /* initialize the stream block       */
+                                     /* upper case the name               */
+  parse upper var stream_name upper_stream_name
+                                     /* one of the standard names?        */
+  /* - also check for standard stream names with colons */
+  if upper_stream_name = 'STDIN' | upper_stream_name = 'STDIN:' |,
+     upper_stream_name = 'STDOUT' | upper_stream_name = 'STDOUT:' |,
+     upper_stream_name = 'STDERR' | upper_stream_name = 'STDERR:' then
+    self~!std_set                    /* have a standard stream            */
+                                     /* and handle open?                  */
+  else if substr(upper_stream_name,1,7) = 'HANDLE:' then
+                                     /* set this as a handle type         */
+    self~!handle_set(substr(stream_name,8))
+  return
+::METHOD close        EXTERNAL 'LIBRARY REXX stream_close'
+::METHOD uninit       EXTERNAL 'LIBRARY REXX stream_uninit'
+
+::METHOD  arrayout                     /* write out lines as an array       */
+  use strict arg array, type='LINES'   /* access the array                  */
+
+  /* the count must be defined in case a SYNTAX or NOTREADY                 */
+  /* condition is raised                                                    */
+  count = 0                            /* set initial counter               */
+  signal on notready                   /* the notready handler              */
+
+  type = type~left(1)~upper
+  if type == 'L' then                /* line type operation?              */
+    lineout = 1                      /* set the line flag                 */
+  else if type == 'C' then           /* character operation?              */
+    lineout = 0                      /* not a line operation              */
+  else
+    raise syntax 93                  /* raise an error                    */
+
+  count = 0                            /* set initial counter               */
+  do item over array                   /* loop over the array               */
+    if lineout then                    /* line operation?                   */
+      self~lineout(item)               /* write out the line                */
+    else
+      self~charout(item)               /* write out as characters           */
+    count = count + 1                  /* bump the counter                  */
+  end
+  return 0
+
+notready:                              /* standard notready handler         */
+  raise propagate return (array~items - count)
+
+::METHOD  makearray                    /* arrayin method                    */
+  forward message 'ARRAYIN'
+
+::METHOD  arrayin                      /* stream makearray method           */
+  use strict arg type='LINES'
+  signal on notready                   /* the notready handler              */
+
+  type = type~left(1)~upper
+  if type == 'L' then                  /* line type operation?              */
+      linein = 1                       /* set the line flag                 */
+  else if type == 'C' then             /* character operation?              */
+      linein = 0                       /* not a line operation              */
+  else
+      raise syntax 93                  /* raise an error                    */
+
+  array = .array~new                   -- we work directly on an array
+
+  signal on notready                   -- the notready trap is a better means of
+                                       -- handling this.
+  if linein then do
+      -- delegate this to the native method, which will trigger a notready
+      -- when done reading.  It will fill in values as it goes.
+      self~line_arrayin(array)
+  end
+  else do
+      do forever
+          array~append(self~charin)
+      end
+  end
+
+notready:
+  return array
+
+::METHOD line_arrayin PRIVATE EXTERNAL 'LIBRARY REXX stream_arrayin'
+
+
+::METHOD command                       /* process a stream command          */
+  expose stream_name                   /* access the stream name            */
+
+  use strict arg command
+  signal on notready                   /* enable notready handler           */
+
+  parse upper var command command_word parms   /* get the command name              */
+  command_word = ' 'command_word       /* add a leading blank               */
+                                       /* expand any abbreviations          */
+  parse value ' CLOSE FLUSH OPEN POSITION QUERY SEEK' with (command_word) +1 command_word .
+
+  select                               /* process each command              */
+    when command_word = 'CLOSE' then
+      return self~close
+
+    when command_word = 'FLUSH' then
+      return self~flush
+
+    when command_word = 'OPEN' then
+      return self~open(parms)
+
+    when command_word = 'POSITION' then
+      return self~position(parms)
+
+    when command_word = 'QUERY' then
+      return self~query(parms)
+
+    when command_word = 'SEEK' then
+      return self~position(parms)
+
+  otherwise                            /* unknown command                   */
+    parse arg command_word .           /* get the original command          */
+    raise syntax 93.914 array (1, 'CLOSE FLUSH OPEN POSITION QUERY SEEK', command_word)
+  end
+
+notready:                              /* standard notready handler         */
+  raise propagate
+
+::METHOD open        EXTERNAL 'LIBRARY REXX stream_open'
+
+::METHOD query                         /* standard query routine            */
+  use strict arg subcommand
+  parse upper var subcommand subcommand parms
+  signal on notready
+  subcommand = ' 'subcommand           /* add a leading blank               */
+                                       /* resolve abbreviations             */
+  parse value ' DATETIME EXISTS HANDLE POSITION SEEK SIZE STREAMTYPE TIMESTAMP' with (subcommand) +1 subcommand .
+  select
+                                       /* need the date and time?           */
+    when subcommand = 'DATETIME' then do
+                                       /* transient style stream?           */
+      if self~!query_streamtype = 'TRANSIENT' then
+        return ''                      /* this doesn't have a date          */
+      c_time = self~!query_time        /* query the time                    */
+      if c_time \= '' then do          /* have one?                         */
+                                       /* get the pieces                    */
+        parse var c_time . month day time year
+        year = year~left(4)            /* make the year 4 characters        */
+                                       /* convert for redisplay             */
+        parse value date('O', day+0 month year) with year '/' month '/' day
+        return month'-'day'-'year time /* return the final time stamp       */
+      end
+      return ''                        /* no time, just return a null string*/
+    end
+                                       /* query the existence               */
+    when subcommand = 'EXISTS' then
+      return self~!query_exists        /* just check to see                 */
+                                       /* get the file handle               */
+    when subcommand = 'HANDLE' then do
+      return self~!query_handle        /* return the file handle            */
+    end
+                                       /* position or seek?                 */
+    when subcommand = 'POSITION' | subcommand = 'SEEK' then do
+                                       /* ask for the position              */
+      return self~!query_position(parms)
+    end
+                                       /* get the size                      */
+    when subcommand = 'SIZE' then
+      return self~!query_size          /* go ask for it                     */
+                                       /* asking for the stream type?       */
+    when subcommand = 'STREAMTYPE' then
+      return self~!query_streamtype    /* just return the type              */
+
+                                       /* asking for a timestamp?           */
+    when subcommand = 'TIMESTAMP' then do
+                                       /* have a transient stream?          */
+      if self~!query_streamtype = 'TRANSIENT' then
+        return ''                      /* no time stamp possible            */
+      c_time = self~!query_time        /* query the time                    */
+      if c_time \= '' then do          /* have one?                         */
+                                       /* get the pieces                    */
+        parse var c_time . month day time year
+        year = year~left(4)            /* make the year 4 characters        */
+                                       /* convert for redisplay             */
+        parse value date('S', day+0 month year) with year +4 month +2 day
+        return year'-'month'-'day time /* return the time stamp             */
+      end
+      return ''                        /* no time, just return a null string*/
+    end
+
+    otherwise
+      raise syntax 93                  /* this is an error                  */
+  end
+
+notready:                              /* standard notready handler         */
+  raise propagate return (self~description)
+
+::METHOD say UNGUARDED                 /* the SAY method                    */
+  use strict arg line = ""             /* enforce zero or one argument      */
+
+  -- NOTE: We do this directly rather than using FORWARD. The SAY instruction
+  -- (and by extension, the SAY method) should not be raising a NOTREADY condition.
+  -- By calling lineout directly rather than using FORWARD, we can swallow a
+  -- NOTREADY.
+  return self~lineout(line)
+
+::METHOD supplier                      /* create a supplier object          */
+use strict arg
+return .StreamSupplier~new(self)       /* return a stream supplier          */
+
+::CLASS 'StreamSupplier' public subclass 'Supplier'   /* stream supplier class             */
+
+::METHOD init                          /* initialization method             */
+                                       /* access the state information      */
+expose stream position line available transient close
+use arg stream                         /* get the stream                    */
+position = 0                           /* set initial position              */
+available = 1                          /* assume this is available          */
+                                       /* a transient stream?               */
+if stream~!query_streamtype == 'TRANSIENT' then
+  transient = .true                    /* remember this                     */
+else
+  transient = .false                   /* we can read by position           */
+line = ''                              /* set a default line                */
+if stream~state == 'UNKNOWN' then      /* remember initial state            */
+  close = .true
+else
+  close = .false
+                                       /* opened persistent stream?         */
+if stream~state == 'READY', \transient then
+  position = stream~!query_position("READ LINE") - 1 /* get current position*/
+self~next                              /* get the first line                */
+
+::METHOD next                          /* step to next element              */
+                                       /* access the state information      */
+expose stream position line available transient close
+use strict arg
+
+if \available then                     /* already reached the end?          */
+  raise syntax 93.937                  /* this is an error                  */
+position = position + 1                /* bump the index                    */
+signal on notready                     /* enable the notready trap          */
+if transient then                      /* transient stream?                 */
+  line = stream~linein                 /* don't try to position             */
+else
+  line = stream~linein(position)       /* read the proper line              */
+return                                 /* all finished                      */
+notready:                              /* notready condition occurred       */
+available = 0                          /* nothing available now             */
+if close then                          /* if stream originally unopened     */
+  stream~close                         /* then close the still open stream  */
+return                                 /* all finished                      */
+
+::METHOD available                     /* is an item available?             */
+expose available                       /* access the flag item              */
+use strict arg
+return available                       /* return the access flag            */
+
+::METHOD item                          /* get the current supplier value    */
+expose line available                  /* access needed object variables    */
+use strict arg
+
+if \available then                     /* already reached the end?          */
+  raise syntax 93.937                  /* this is an error                  */
+return line                            /* return the file line              */
+
+::METHOD index                         /* get the current supplier index    */
+expose position available              /* access needed object variables    */
+use strict arg
+
+if \available then                     /* already reached the end?          */
+  raise syntax 93.937                  /* this is an error                  */
+
+return position
+
+/*****************************************************************/
+/* Create the rx_queue class and define its associated methods */
+/*****************************************************************/
+::CLASS 'RexxQueue' public
+::METHOD create  CLASS   EXTERNAL 'LIBRARY REXX rexx_create_queue'
+::METHOD delete  CLASS   EXTERNAL 'LIBRARY REXX rexx_delete_queue'
+::METHOD exists  CLASS   EXTERNAL 'LIBRARY REXX rexx_queue_exists'
+::METHOD open    CLASS   EXTERNAL 'LIBRARY REXX rexx_open_queue'
+
+::METHOD init
+  expose named_queue
+  use strict arg name_queue = "SESSION"
+  named_queue = name_queue~upper
+  if named_queue \= 'SESSION' then do
+      self~class~open(named_queue)
+  end
+  self~objectname = named_queue        /* and also set as an object name    */
+
+::METHOD get unguarded                 /* get the queue name                */
+  expose named_queue                   /* just expose and return            */
+  use strict arg
+  return named_queue
+
+::METHOD set                           /* set a new queue                   */
+  expose named_queue                   /* get the old queue name            */
+  use strict arg new_queue             /* the new queue name                */
+  new_queue = new_queue~upper
+  old_queue = named_queue              /* save the old name                 */
+  named_queue = new_queue              /* set the new current name          */
+  self~objectname = new_queue          /* and also set as an object name    */
+  return old_queue                     /* and return the old one            */
+
+-- delete the named queue when finished
+::method delete
+  expose named_queue
+  use strict arg                       /* enforce no argument               */
+  if named_queue \= 'SESSION' then do
+      self~class~delete(named_queue)
+  end
+
+::METHOD lineout
+  forward message 'QUEUE'
+
+::METHOD say
+  forward message 'QUEUE'
+
+::METHOD makearray
+  use strict arg
+  qItems = self~queued
+  arr = .array~new(qItems)
+  do i = 1 to qItems
+     line = self~pull
+     if line~isNil /* items have been removed by another thread or process */
+     then do
+        arr = arr~section(1, i - 1)
+        leave
+     end /* DO */
+     arr[i]=line
+  end /* DO */
+  return arr
+
+::METHOD push            EXTERNAL 'LIBRARY REXX rexx_push_queue'
+::METHOD queue           EXTERNAL 'LIBRARY REXX rexx_queue_queue'
+::METHOD pull            EXTERNAL 'LIBRARY REXX rexx_pull_queue'
+::METHOD linein          EXTERNAL 'LIBRARY REXX rexx_linein_queue'
+::METHOD queued          EXTERNAL 'LIBRARY REXX rexx_query_queue'
+::METHOD empty           EXTERNAL 'LIBRARY REXX rexx_clear_queue'
+
+
+-- ooRexx File class
+::CLASS "File" public inherit Comparable Orderable
+
+-- REXX in "library REXX" must be in uppercase
+
+::method file_temporary_path class private external "library REXX"
+::method temporaryPath class
+  use strict arg
+  return self~new(self~file_temporary_path)
+
+
+::METHOD init
+  expose path qualifiedPath
+
+  use strict arg path, dir = .nil
+  qualifiedPath = .nil
+
+  if dir~isNil then do
+      -- if we don't have a path, then we can't do a lazy
+      -- qualification because the current directory might
+      -- change.  We need to process everything
+      path = self~normalizePathSyntax(path)
+      self~qualifiedPath
+  end
+  else do
+      if dir~isA(.File) then do
+          -- if we're relative to another file object, then
+          -- we don't need to qualify this now.  This is very common
+          -- if we're requesting a list of files under a directory.  We
+          -- want to avoid the overhead of additional system calls.
+          dir = dir~absolutePath
+          path = self~createPath(dir, path)
+      end
+      else do
+          -- string based path name.  Create the path, and then qualify it
+          -- now because we don't have an absolute path to work with.
+          path = self~createPath(dir, path)
+          self~qualifiedPath
+      end
+  end
+
+-- support the query methods as both instance and class methods
+::METHOD separator CLASS EXTERNAL 'LIBRARY REXX file_separator'
+::METHOD pathSeparator CLASS EXTERNAL 'LIBRARY REXX file_path_separator'
+::METHOD isCaseSensitive CLASS EXTERNAL 'LIBRARY REXX file_case_sensitive'
+::METHOD listRoots CLASS EXTERNAL 'LIBRARY REXX file_list_roots'
+::METHOD searchPathImpl CLASS PRIVATE EXTERNAL 'LIBRARY REXX file_search_path_impl'
+::method searchPath CLASS
+  use strict arg file, pathList
+
+  path = .mutableBuffer~new
+
+  -- the loop will issue the appropriate error message if this cannot be converted to an array
+  loop dir over pathList
+     if path~length > 0 & \path~endsWith(self~pathSeparator) then do
+        path~append(self~pathSeparator)
+     end
+
+     if dir~isA(.file) then do
+        path~append(dir~absolutePath)
+     end
+     else do
+        path~append(dir)
+     end
+  end
+
+  file = self~searchPathImpl(file, path)
+  if file \= .nil then do
+     file = .file~new(file)
+  end
+
+  return file
+
+::METHOD separator EXTERNAL 'LIBRARY REXX file_separator'
+::METHOD pathSeparator EXTERNAL 'LIBRARY REXX file_path_separator'
+
+-- Normalize the path separator syntax for a new File instance
+::METHOD normalizePathSyntax PRIVATE
+  use strict arg path
+
+  separator = self~separator
+
+  -- since we might need to make multiple updates,
+  -- do this in a mutable buffer
+  buffer = .mutableBuffer~new(path)
+
+  -- we only need to fix this up for Windows, since that has a platform
+  -- specific separator that's different from the default
+  if separator == "\" then do
+      buffer~changeStr('/', '\')   -- convert all slashes to backslashes
+  end
+
+  -- the last name element should not end with a separator
+  -- remove it if one is there, but keep "d:\" or a single "/" as-is
+  if buffer[2] == ":" then
+      minimum = 3
+  else
+      minimum = 1
+  do while buffer~length > minimum, buffer~endsWith(separator)
+      buffer~delstr(buffer~length, 1)
+  end
+
+  return buffer~string
+
+-- Create a new path name from a parent directory and a path
+::METHOD createPath PRIVATE
+  use strict arg dir, name
+
+  dir = self~normalizePathSyntax(dir)
+  name = self~normalizePathSyntax(name)
+
+  separator = self~separator
+
+  -- remove leading separators from the name, if there are any
+  firstNonSep = name~verify(separator)
+
+  if firstNonSep > 1 then do
+      name = name~substr(firstNonSep)
+  end
+
+  -- the normalization process has removed trailing separators, except for
+  -- the case where the dir is a root specification, / or d:/
+
+  if dir~endsWith(separator) then do
+      return dir || name
+  end
+  else do
+      return dir || separator || name
+  end
+
+-- get the qualified path for this File instance
+::METHOD qualifiedPath PRIVATE
+  expose path qualifiedPath
+
+  if qualifiedPath~isNil then do
+      qualifiedPath = self~qualifyImpl(path)
+  end
+
+  return qualifiedPath
+
+::METHOD canReadImpl PRIVATE EXTERNAL 'LIBRARY REXX file_can_read'
+::METHOD setReadOnlyImpl PRIVATE EXTERNAL 'LIBRARY REXX file_set_read_only'
+::METHOD setWritableImpl PRIVATE EXTERNAL 'LIBRARY REXX file_set_writable'
+::METHOD canWriteImpl PRIVATE EXTERNAL 'LIBRARY REXX file_can_write'
+::METHOD existsImpl PRIVATE EXTERNAL 'LIBRARY REXX file_exists'
+::METHOD qualifyImpl PRIVATE EXTERNAL 'LIBRARY REXX file_qualify'
+::METHOD isCaseSensitiveImpl PRIVATE EXTERNAL 'LIBRARY REXX this_file_case_sensitive'
+
+-- test if this individual file name is case sensitive
+::METHOD isCaseSensitive
+  use strict arg
+
+  return self~isCaseSensitiveImpl(self~qualifiedPath)
+
+::METHOD canRead
+  use strict arg
+  return self~canReadImpl(self~qualifiedPath)
+
+::METHOD setReadOnly
+  use strict arg
+  self~setReadOnlyImpl(self~qualifiedPath)
+
+::METHOD setWritable
+  use strict arg
+  self~setWritableImpl(self~qualifiedPath)
+
+::METHOD canWrite
+  use strict arg
+  return self~canWriteImpl(self~qualifiedPath)
+
+-- perform a sorting comparison between two file objects
+::method compareTo
+  use strict arg other
+
+  if \other~isA(.File) then
+    forward class (super) -- let the default implementation handle this
+
+  if self~isCaseSensitive then do
+       return self~absolutePath~compareTo(other~absolutePath)
+  end
+  else do
+       return self~absolutePath~caselessCompareTo(other~absolutePath)
+  end
+
+::METHOD deleteDir PRIVATE EXTERNAL 'LIBRARY REXX file_delete_directory'
+::METHOD deleteFile PRIVATE EXTERNAL 'LIBRARY REXX file_delete_file'
+
+::METHOD delete
+  use strict arg
+
+  if self~isDirectory then do
+      return self~deleteDir(self~qualifiedPath)
+  end
+  else do
+      return self~deleteFile(self~qualifiedPath)
+  end
+
+::METHOD exists
+  use strict arg
+  return self~existsImpl(self~qualifiedPath)
+
+::METHOD absolutePath
+  use strict arg
+  return self~qualifiedPath
+
+::METHOD absoluteFile
+  use strict arg
+  return self~class~new(self~qualifiedPath)
+
+-- return the name portion of the file.  This is everything after the
+-- last path separator
+::METHOD name
+  use strict arg
+
+  path = self~qualifiedPath
+
+  sep = path~lastPos(self~separator)
+  if sep == 0 then do
+      return path
+  end
+  else do
+      return path~substr(sep + 1)
+  end
+
+-- extract the parent directory portion of this file
+::METHOD parent
+  use strict arg
+  path = self~qualifiedPath
+
+  sep = path~lastPos(self~separator)
+  -- if no separator is found or the qualified name ends with a
+  -- separator (which means this is a root element), then return
+  -- .nil
+  if sep == 0 | path~match(path~length, self~separator) then do
+      return .nil
+  end
+
+  return path~substr(1, sep - 1)
+
+::METHOD parentFile
+  use strict arg
+  parent = self~parent
+  if parent~isNil then
+      return .nil
+
+  return self~class~new(parent)
+
+-- the original path name used to create the File object
+::ATTRIBUTE path GET
+
+::METHOD hashCode
+  use strict arg
+
+  return self~qualifiedPath~hashCode
+
+::METHOD isDirectoryImpl PRIVATE EXTERNAL 'LIBRARY REXX file_isDirectory'
+::METHOD isFileImpl PRIVATE EXTERNAL 'LIBRARY REXX file_isFile'
+::METHOD isHiddenImpl PRIVATE EXTERNAL 'LIBRARY REXX file_isHidden'
+
+::METHOD isDirectory
+  use strict arg
+  return self~isDirectoryImpl(self~qualifiedPath)
+
+::METHOD isFile
+  use strict arg
+  return self~isFileImpl(self~qualifiedPath)
+
+::METHOD isHidden
+  use strict arg
+  return self~isHiddenImpl(self~qualifiedPath)
+
+::METHOD getLastModifiedImpl PRIVATE EXTERNAL 'LIBRARY REXX file_get_last_modified'
+::METHOD setLastModifiedImpl PRIVATE EXTERNAL 'LIBRARY REXX file_set_last_modified'
+
+::METHOD getLastAccessedImpl PRIVATE EXTERNAL 'LIBRARY REXX file_get_last_accessed'
+::METHOD setLastAccessedImpl PRIVATE EXTERNAL 'LIBRARY REXX file_set_last_accessed'
+
+::ATTRIBUTE lastModified GET
+  use strict arg
+
+  usecs = self~getLastModifiedImpl(self~qualifiedPath)
+  -- if this doesn't exist, return a .nil return value
+  if usecs = -999999999999999999 then
+      return .nil
+
+  -- return as a DateTime object
+  return .DateTime~new(usecs)
+
+::ATTRIBUTE lastModified SET
+  use strict arg date
+
+  .Validate~classType("date", date, .DateTime)
+
+  self~setLastModifiedImpl(self~qualifiedPath, date~fullDate)
+
+::ATTRIBUTE lastAccessed GET
+  use strict arg
+
+  usecs = self~getLastAccessedImpl(self~qualifiedPath)
+  -- if this doesn't exist, return a .nil return value
+  if usecs = -999999999999999999 then
+      return .nil
+
+  -- return as a DateTime object
+  return .DateTime~new(usecs)
+
+::ATTRIBUTE lastAccessed SET
+  use strict arg date
+
+  .Validate~classType("date", date, .DateTime)
+
+  self~setLastAccessedImpl(self~qualifiedPath, date~fullDate)
+
+::METHOD lengthImpl PRIVATE EXTERNAL 'LIBRARY REXX file_length'
+
+::METHOD length
+  use strict arg
+  return self~lengthImpl(self~qualifiedPath)
+
+::METHOD listImpl PRIVATE EXTERNAL 'LIBRARY REXX file_list'
+
+::METHOD list
+  use strict arg
+
+  return self~listImpl(self~qualifiedPath)
+
+::METHOD listFiles
+  use strict arg
+
+  names = self~list
+  if names~isNil then
+      return .nil
+
+  files = .array~new(names~items)
+
+  do name over names
+      files~append(self~class~new(name, self))
+  end
+
+  return files
+
+::METHOD makeDirImpl PRIVATE EXTERNAL 'LIBRARY REXX file_make_dir'
+
+-- makes just the directory represented by the top-level name.  Does not
+-- create any parent directories
+::METHOD makeDir
+  use strict arg
+  return self~makeDirImpl(self~qualifiedPath)
+
+-- create the entire directory hierarchy represented by this file
+::METHOD makeDirs
+  use strict arg
+
+  -- can't create if this already exists
+  if self~exists then
+      return .false
+  -- if we can create the fully resolved name, the parents exist
+  if self~makeDir() then
+      return .true
+
+  -- we might be at the top level already
+  parent = self~parentFile
+  if parent~isNil then
+      return .false
+  -- try to create the parent directories first
+  if \parent~makeDirs then
+      return .false
+  -- the parent worked, try to create our dir again
+  return self~makeDir
+
+::METHOD renameToImpl PRIVATE EXTERNAL 'LIBRARY REXX file_rename'
+
+::METHOD renameTo
+  use strict arg dest
+
+  .Validate~classType("destination", dest, .File)
+
+  return self~renameToImpl(self~qualifiedPath, dest~qualifiedPath)
+
+::METHOD string
+  expose path
+  use strict arg
+  return path
+

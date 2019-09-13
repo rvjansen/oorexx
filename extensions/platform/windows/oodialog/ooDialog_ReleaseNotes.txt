@@ -1,0 +1,307 @@
+                      Release Notes ooDialog 4.2.3
+                      ============================
+
+The ooDialog 4.2.3 release is a routine update, providing some
+incremental improvements and a few bug fixes.
+
+ooDialog 4.2.3 can be installed to any ooRexx installation, 4.1.0 or
+later.
+
+Beginning with the release of ooDialog 4.2.0, the installation of
+ooDialog has been decoupled from the interpreter.  ooDialog 4.2.3
+installs over the top of any ooRexx installation.  It replaces the
+version of ooDialog in the ooRexx installation with ooDialog 4.2.3.
+
+This type of ooDialog installation is called an "independent" ooDialog
+installation to indicate the ooDialog installation is independent of an
+ooRexx installation and, to a degree, the version of ooRexx installed.
+
+The independent ooDialog 4.2.3 installation package can be installed to
+any ooRexx installation, version 4.1.0 or later.
+
+ooDialog 4.2.3 is distributed with ooRexx 4.2.0.
+
+
+Indpendent Installation
+========================================================================
+
+The independent installation package is simple, done through a typical
+Windows installer.  Pick the installation package that matches the
+bitness of the ooRexx installation.  I.e., a 32-bit package for a 32-bit
+ooRexx and a 64-bit package for a 64-bit ooRexx.
+
+The installer will detect the installed ooRexx, location and version.
+If the ooRexx version is less than 4.1.0, or if there is no installed
+ooRexx, the installer will abort with a message explaining the problem.
+Otherwise the installer will replace the current ooDialog with ooDialog
+4.2.3.
+
+Note that the actions of the installer are dependent on the version of
+ooRexx, not the version of the installed ooDialog.  For instance, if the
+installed ooDialog is version 4.3.0, but for some reason the user is not
+happy with that version, running the ooDialog 4.2.3 installer will
+replace the 4.3.0 version with the 4.2.3 version.
+
+At the time of the installation, *all* ooDialog programs must be halted
+and the ooDialog PDFs must be closed if they happen to be opened.
+
+
+Changes in ooDialog 4.2.3 since the release of ooDialog 4.2.2
+========================================================================
+
+Bug Fixes in ooDialog:
+----------------------
+
+ * #1175 Incorrect super class initialization can bypass DynamicDialog
+   init
+
+ * #1176 ooDialog - the SingleSelection class has the potential of not
+   executing
+
+ * #1198 ooDialog installer aborts if oodialog.pdf does not exist
+
+   Note: bug #1198 applies to the independent ooDialog installer only.
+   It is not relevant when installing ooRexx 4.2.0
+
+ * #1204 When parsing a .rc file ooDialog does not recognize some
+   control statements
+
+
+DocumentationBug Fixes in ooDialog:
+----------------------------------
+
+ * #201 getTextAlign(), getTextExtent(), setTextAlign() not documented
+
+ * #202 ooDialog Reference 4.2.3 - Text errors in Section 8.1 "Method
+   Table"
+
+
+Feature Requests in ooDialog:
+-----------------------------
+
+ * #508 ooDialog - index for tree-view state images
+
+ * #537 Add FIle Open Dialog to allow more options than available with
+   the FileNameDialog
+
+ * #540 Add a stand alone ooDialog program launcher
+
+ * #549 The setColor() method does not work well with comboboxes
+
+ * #554 Enhance stand alone ooDialog installer to use components
+
+ * #555 .OpenFileDialog set the 'CANCEL' button label
+
+ * #556 Would like access to the Win32 UpdateWindow() API
+
+ * #559 ooDialog - add a convenience function to help locate resource
+   files
+
+
+Miscellaneous Fixes:
+--------------------
+
+ * Fixed a problem detecting some controls in the .rc files produced by
+   some resource editors.  Combo box, edit, list box, and scroll bar.
+
+
+New Functionality in ooDialog:
+------------------------------
+
+The stand alone ooDialog installer now allows the user to choose to skip
+the installation of the documentation and / or the example programs.
+This matches the ooRexx installation where the documentation and sample
+programs do not have to be installed.
+
+An ooDialog executable, ooDialog.exe, has been added to the
+distribution.  The executable will run ooDialog programs in a manner
+similare to rexxhide, provides command line information on the version
+of ooDialog installed, and can be used to set up file types and
+associations for ooDialog programs.
+
+
+New dialog classes:
+-------------------
+
+CommonItemDialog class
+
+OpenFileDialog class
+
+SaveFileDialog class
+
+
+
+New utility classes:
+--------------------
+
+CommonDialogCustomizations class
+
+ComConstants class
+
+ShellItemFilter class
+
+CommonDialogEvents class
+
+
+
+New Methods:
+------------
+
+In the Application class:
+
+requiredOS()       Checks that the current operating system is at least
+                   the minmum specified.
+
+In the WindowBase class:
+
+updateWindow()     Causes an immediate repaint of an invalid region in
+                   the window.  Does nothing if there is no invalid
+                   region.
+
+In the ComboBox class:
+
+removeFullColor()  Restores the color of the combo box to its default
+                   color if the setFullColor() method has previousl been
+                   invoked.
+
+setFullColor()     Sets the color of a combo box for all parts of the
+                   combo box.
+
+In the DlgUtil class:
+
+getGUID()          Generates a GUID and returns it in the converntional
+                   string format.
+
+In the TreeView class:
+
+getStateImage()     Retrieves the state image index in the image list
+                    for the specified item.
+
+setStateImage()     Assigns the state image index in the image list for
+                    the specified item.
+
+
+Enhanced Methods:
+-----------------
+
+In the TreeView class:
+
+getImageList()      Enhanced to take a keyword for the type of image
+                    list in addition to the raw number.
+
+setImageList()      Enhanced to take a keyword for the type of image
+                    list in addition to the raw number.
+
+
+New Attributes:
+--------------
+
+In the Application class:
+
+srcDir       Returns the directory name the initial Rexx program was
+             started in.
+
+
+New Public Routines:
+--------------------
+
+locate()    Returns the complete directory name of the Rexx source code
+            file that is executing and sets the .application srcDir
+            attribute to that value.
+
+
+New samples:
+------------
+
+* oodialog\controls\ComboBox\comboBoxTypes.rex
+
+Demonstrates what the 3 types of combo boxes look like.  Shows how to
+use the removeFullColor() and setFullColor() methods of the ComboBox
+class.
+
+* oodialog\controls\ListBox\incrementalSearch.rex
+
+Shows how to implement an incremental search feature for the items in a
+list box and over-ride the list box control's internal incremental
+search.
+
+* oodialog\examples\genGUID.rex
+
+An example showing how to use the .DlgUtil's genGUID() method.  Also
+provides a simple application that can be used to generate GUIDs for any
+use.
+
+* oodialog\examples\openSaveFileDemo.rex
+
+An example showing a number of different uses of both the Open File
+Dialog and the Save File Dialog.  Demonstrates the most common usage
+patterns.
+
+* oodialog\examples\saveFileWithFilter.rex
+
+An example showing how to use the Common Item Dialog in file save mode.
+This example shows 2 things.  1.) How to use a filter with the dialog.
+This is done with the .ShellItemFilter class.  2.) How to connect event
+notifications.  This is done with the .CommonDialogEvents class.
+
+* oodialog\controls\ListView\subitem.editing\importList.rex
+
+An example showing how to embed contorls in a list view to allow
+in-place subitem editing.  The example also demonstrates the
+ResizingAdmin and BrowseForFolder classes.
+
+
+Enhanced Samples:
+-----------------
+
+All of the samples have been enhanced so the they can locate any needed
+resource files no matter which directory they are executed from.  This
+allows them to run correctly if, for example, they are dragged and
+dropped on ooDialog.exe.
+
+
+
+Known Problems, "Gotchas," and Solutions with Independent Installations
+========================================================================
+
+* Problem:
+
+The ooRexx installer creates a log of the files it installs.  When the
+uninstaller runs, the user can select to only uninstall files logged
+during installtion.  An indpendent ooDialog installation may install
+some example programs, documentation files, and shortcuts not recorded
+in the log file.  When ooRexx is uninstalled or upgraded, these files
+and shortcuts may not be deleted.
+
+  Solution 1:
+
+  Before uninstalling ooRexx, install the independent ooDialog that
+  matches the ooRexx installation.  I.e., if the ooRexx installation is
+  any 4.0.x, or 4.1.x ooRexx version, install the ooDialog 4.1.0
+  indpendent installation. Then when ooRexx is uninstalled, all ooDialog
+  files and shortcuts will be removed because the files and shortcuts
+  exactly match what was installed during the ooRexx installation.
+
+  Solution 2:
+
+  After uninstalling ooRexx, manually delete any files in the old ooRexx
+  installation directory.
+
+* Gotcha:
+
+  The independent ooDialog installation deletes the entire ooDialog
+  samples subdirectory tree.  This will delete any personal files
+  that may have been put there after ooRexx was installed.
+
+  Solution 1:
+
+  Do not put personal files in the %REXX_HOME%\samples\ooDialog
+  subdirectory tree.
+
+  Solution 2:
+
+  Before executing the independent ooDialog installer, move or back up
+  any personal files that may be in %REXX_HOME%\samples\ooDialog
+  subdirectory tree.
+
+
