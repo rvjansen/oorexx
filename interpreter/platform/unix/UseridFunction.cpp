@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -43,10 +43,7 @@
 # include <pwd.h>
 #endif
 
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-
+#include <unistd.h>
 #include "RexxCore.h"
 #include "StringClass.hpp"
 #include "SystemInterpreter.hpp"
@@ -64,18 +61,10 @@
 RexxString *SystemInterpreter::getUserid()
 {
     char account_buffer[ACCOUNT_BUFFER_SIZE];
-#if defined( HAVE_GETPWUID )
-    struct passwd * pstUsrDat;
-#endif
+    struct passwd *pstUsrDat;
 
     account_buffer[ACCOUNT_BUFFER_SIZE-1] = '\0'; /* Max delimiter            */
-#if defined( HAVE_GETPWUID )
     pstUsrDat = getpwuid(geteuid());
-    strncpy( account_buffer,  pstUsrDat->pw_name, ACCOUNT_BUFFER_SIZE-1);
-#elif defined( HAVE_IDTOUSER )
-    strncpy( account_buffer, IDtouser(geteuid()), ACCOUNT_BUFFER_SIZE-1);
-#else
-    strcpy( account_buffer, "unknown" );
-#endif
+    strncpy(account_buffer, pstUsrDat->pw_name, ACCOUNT_BUFFER_SIZE-1);
     return new_string(account_buffer);
 }

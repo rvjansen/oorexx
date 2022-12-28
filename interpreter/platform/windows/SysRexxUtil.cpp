@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -256,68 +256,77 @@ RexxRoutine1(int, SysCurState, CSTRING, option)
 
 
 /*************************************************************************
-* Function:  SysDriveInfo                                                *
+* Function:  SysDriveInfo - returns total number of free bytes,          *
+*                           total number of bytes, and                   *
+*                           volume label                                 *
 *                                                                        *
-* Syntax:    call SysDriveInfo drive                                     *
+* Syntax:    result = SysDriveInfo([drive])                              *
 *                                                                        *
-* Params:    drive - 'C', 'D', 'E', etc.                                 *
+* Params:    drive - d, d:, d:\, \\share\path                            *
+*                    if omitted, defaults to current drive               *
 *                                                                        *
-* Return:    disk free total label                                       *
+* Return:    result - drive free total label                             *
+*                     null string for any error                          *
 *************************************************************************/
 
-RexxRoutine1(RexxStringObject, SysDriveInfo, CSTRING, drive)
+RexxRoutine1(RexxStringObject, SysDriveInfo, OPTIONAL_CSTRING, drive)
 {
-    size_t driveLength = strlen(drive);
+    FileNameBuffer d;
 
-    if (driveLength == 0 || driveLength > 2 || (driveLength == 2 && drive[1] != ':'))
+    if (drive == NULL)
     {
-        context->ThrowException1(Rexx_Error_Incorrect_call_user_defined, context->String("Invalid drive specification"));
-    }
-
-    // This must be a valid alphabetic character
-    if (drive[0] < 'A' || drive[0] > 'z')
-    {
-        context->ThrowException1(Rexx_Error_Incorrect_call_user_defined, context->String("Invalid drive specification"));
-    }
-
-    char driveLetter[8];
-    snprintf(driveLetter, sizeof(driveLetter), "%c:\\", toupper(drive[0]));
-
-    AutoErrorMode errorMode(SEM_FAILCRITICALERRORS);
-    char volumeName[MAX_PATH];
-    char fileSystemType[MAX_PATH];
-
-    /* get the volume name and file system type */
-    BOOL gotVolume = GetVolumeInformation(driveLetter, volumeName, (DWORD)sizeof(volumeName),
-                                          NULL, NULL, NULL,
-                                          fileSystemType, (DWORD)sizeof(fileSystemType));
-
-    DWORD gviError = GetLastError();
-
-    /* use appropriate function */
-    uint64_t freeBytesToCaller;
-    uint64_t totalBytes;
-    uint64_t freeBytes;
-
-    BOOL gotDiskSpace = GetDiskFreeSpaceEx(driveLetter, (PULARGE_INTEGER)&freeBytesToCaller, (PULARGE_INTEGER)&totalBytes, (PULARGE_INTEGER)&freeBytes);
-
-    DWORD gdfsError = GetLastError();
-
-    if (gotVolume && gotDiskSpace)
-    {
-        char retstr[256];
-
-        snprintf(retstr, sizeof(retstr),      // drive free total label
-                 "%c%c  %-12I64u %-12I64u %-13s",
-                 driveLetter[0], driveLetter[1],
-                 freeBytes, totalBytes, volumeName);
-        /* create return string       */
-        return context->String(retstr);
+        // Although the Windows APIs interpret NULL as the current drive,
+        // we still need to figure out the actual current drive as we are
+        // expected to return it as the first word.
+        GetCurrentDirectory((DWORD)d.capacity(), (LPTSTR)d);
+        if (d.length() >= 3 && d.at(1) == ':' && d.at(2) == '\\')
+        {
+            // current directory is a standard d:\path, just keep the d:\ part
+            d.truncate(3);
+        }
+        else if (d.startsWith("\\\\"))
+        {
+            // current directory is a UNC path, just keep the \\share\path\ part
+            d.truncate(d.locatePathDelimiter(d.locatePathDelimiter(2) + 1));
+        }
     }
     else
     {
-        return context->NullString();
+        d = drive;
+        // We just let the Windows APIs handle all the different ways to
+        // specify a volume, like d:\, \\?\d:, \\localhost\path, etc.  But
+        // on top of that we support a single-character drive d.
+        if (d.length() == 1 && Utilities::isAlpha(d.at(0)))
+        {
+            // make this a valid drive specification
+            d += ":\\";
+        }
     }
+
+    // GetVolumeInformation() is picky, it requires a final backslash
+    if (d.length() > 0)
+    {
+        d.addFinalPathDelimiter();
+    }
+
+    // get the volume label, then the total bytes and total free bytes
+    char volume[MAX_PATH];
+    uint64_t total, free;
+    if (GetVolumeInformation((char * )d, volume, (DWORD)sizeof(volume), NULL, NULL, NULL, NULL, 0) &&
+        GetDiskFreeSpaceEx(d, NULL, (PULARGE_INTEGER)&total, (PULARGE_INTEGER)&free))
+    {
+        // we remove any trailing backslash for our return string
+        if (d.length() > 1 && d.endsWith("\\"))
+        {
+            d.truncate(d.length() - 1);
+        }
+
+        // return drive free total label
+        char retstr[256];
+        snprintf(retstr, sizeof(retstr), "%s %I64u %I64u %s", (char *)d, free, total, volume);
+        return context->String(retstr);
+    }
+    return context->NullString();
 }
 
 
@@ -363,7 +372,7 @@ RexxRoutine2(RexxStringObject, SysDriveMap, OPTIONAL_CSTRING, drive, OPTIONAL_CS
         }
 
         // make sure this is in range
-        start = toupper(drive[0]) - 'A' + 1;
+        start = Utilities::toUpper(drive[0]) - 'A' + 1;
         if (start < 1 || start > 26)
         {
             context->ThrowException1(Rexx_Error_Incorrect_call_user_defined, context->String("Invalid drive specification"));
@@ -448,7 +457,6 @@ RexxRoutine2(RexxStringObject, SysDriveMap, OPTIONAL_CSTRING, drive, OPTIONAL_CS
                 char deviceName[8];
                 snprintf(deviceName, sizeof(deviceName), "%c:\\", dnum + 'A' - 1);
 
-                AutoErrorMode errorMode(SEM_FAILCRITICALERRORS);
                 // if this matches what we're looking for, add it to the list
                 if (driveType == GetDriveType(deviceName))
                 {
@@ -475,24 +483,24 @@ RexxRoutine2(RexxStringObject, SysDriveMap, OPTIONAL_CSTRING, drive, OPTIONAL_CS
 
 /**
  *
- * if this ends in a directory separator, add a *.* wildcard to the end
+ * if this ends in a directory separator, add a * wildcard to the end
  */
 void TreeFinder::adjustDirectory()
 {
-    // if this ends in a directory separator, add a *.* wildcard to the end
-    if (fileSpec.endsWith('\\'))
+    // if this ends in a directory separator, add a * wildcard to the end
+    if (fileSpec.endsWith('\\') || fileSpec.endsWith('/'))
     {
-        fileSpec += "*.*";
+        fileSpec += "*";
     }
-    // just a ' or .. is wildcarded also
+    // just a . or .. is wildcarded also
     else if (fileSpec == "." || fileSpec == "..")
     {
-        fileSpec += "\\*.*";
+        fileSpec += "\\*";
     }
-    // if the end section is either \. or .., we also add the wildcard
-    else if (fileSpec.endsWith("\\.") || fileSpec.endsWith("\\.."))
+    // if the end section is either \. or \.., we also add the wildcard
+    else if (fileSpec.endsWith("\\.") || fileSpec.endsWith("\\..")  || fileSpec.endsWith("/.") || fileSpec.endsWith("/.."))
     {
-        fileSpec += "\\*.*";
+        fileSpec += "\\*";
     }
 }
 
@@ -552,18 +560,6 @@ void TreeFinder::adjustFileSpec()
             // perform a left shift on the buffer
             fileSpec.shiftLeft(i);
         }
-    }
-
-    // is the spec exactly equal to the current directory?
-    if (fileSpec == ".")
-    {
-        // make this a wildcard
-        fileSpec = "*.*";
-    }
-    // exclusively the previous directory, this also becomes a wildcard
-    else if (fileSpec == "..")
-    {
-        fileSpec = "..\\*,*";
     }
 }
 
@@ -716,6 +712,7 @@ void formatFileAttributes(TreeFinder *finder, FileNameBuffer &foundFile, SysFile
     // Since we can count the characters put into the buffer here, there is
     // no need to check for buffer overflow.
 
+    // wYear range is 1601 through 30827
     if (finder->longTime())
     {
         snprintf(fileAttr, sizeof(fileAttr), "%4d-%02d-%02d %02d:%02d:%02d  ",
@@ -725,13 +722,14 @@ void formatFileAttributes(TreeFinder *finder, FileNameBuffer &foundFile, SysFile
     else if (finder->editableTime())
     {
         snprintf(fileAttr, sizeof(fileAttr), "%02d/%02d/%02d/%02d/%02d  ",
-                 (systime.wYear + 100) % 100, systime.wMonth, systime.wDay,
+                 systime.wYear % 100, systime.wMonth, systime.wDay,
                  systime.wHour, systime.wMinute);
+
     }
     else
     {
         snprintf(fileAttr, sizeof(fileAttr), "%2d/%02d/%02d  %2d:%02d%c  ",
-                 systime.wMonth, systime.wDay, (systime.wYear + 100) % 100,
+                 systime.wMonth, systime.wDay, systime.wYear % 100,
                  (systime.wHour < 13 && systime.wHour != 0 ?
                   systime.wHour : (abs(systime.wHour - (SHORT)12))),
                  systime.wMinute, (systime.wHour < 12 || systime.wHour == 24) ? 'a' : 'p');
@@ -1044,18 +1042,12 @@ RexxRoutine1(RexxStringObject, SysGetKey, OPTIONAL_CSTRING, echoOpt)
 *            ERROR_RETSTR   - Error opening INI or querying/writing info.*
 *************************************************************************/
 
-RexxRoutine4(RexxStringObject, SysIni, OPTIONAL_CSTRING, iniFile, CSTRING, app, OPTIONAL_RexxObjectPtr, key, OPTIONAL_RexxObjectPtr, val)
+RexxRoutine4(RexxStringObject, SysIni, OPTIONAL_CSTRING, iniFile, CSTRING, app, RexxObjectPtr, key, OPTIONAL_RexxObjectPtr, val)
 {
     // the ini file is optional and defaults to WIN.INI
     if (iniFile == NULL)
     {
         iniFile = "WIN.INI";
-    }
-
-    // if the key was not specified, use a null string
-    if (key == NULLOBJECT)
-    {
-        key = context->NullString();
     }
 
     // Process first off of the app key. This could be a keyword command, which changes
@@ -1107,6 +1099,11 @@ RexxRoutine4(RexxStringObject, SysIni, OPTIONAL_CSTRING, iniFile, CSTRING, app, 
         StemHandler stemVariable(context);            // used to manipulate the stem variable for return values.
 
         // val is the stem variable for this case
+        if (argumentOmitted(4))
+        {
+            // Missing argument; argument 4 is required
+            context->ThrowException1(Rexx_Error_Invalid_argument_noarg, context->WholeNumberToObject(4));
+        }
         stemVariable.setStem(val, 4);
 
         size_t lSize = 0x0000ffffL;
@@ -1134,6 +1131,12 @@ RexxRoutine4(RexxStringObject, SysIni, OPTIONAL_CSTRING, iniFile, CSTRING, app, 
     // this could be a DELETE: operation for a particular application
     if (stricmp(keyName, "DELETE:") == 0)
     {
+        // the 4th argument cannot be specified
+        if (argumentExists(4))
+        {
+            maxArgException(context, "SysIni DELETE:", 3);
+        }
+
         // A request to delete all keys for a given application
         if (!WritePrivateProfileString(app, NULL, NULL, iniFile))
         {
@@ -1177,7 +1180,7 @@ RexxRoutine4(RexxStringObject, SysIni, OPTIONAL_CSTRING, iniFile, CSTRING, app, 
     // this could be a key deletion request
     if (stricmp(valueString, "DELETE:") == 0)
     {
-        // A request to delete all keys for a given application
+        // A request to delete a key for a given application
         if (!WritePrivateProfileString(app, keyName, NULL, iniFile))
         {
             return context->NewStringFromAsciiz(ERROR_RETSTR);
@@ -1312,65 +1315,35 @@ RexxRoutine1(uint32_t, SysWinDecryptFile, CSTRING, fileName)
 
 RexxRoutine0(RexxStringObject, SysWinVer)
 {
-    char windowsDir[256];
-    char kernel32[256];
+    // MS has deprecated GetVersionEx().  Also, since 10.0.18363, querying
+    // the version information from one of the system DLLs won't give the
+    // correct version number any longer.  The only remaining option seems
+    // to be this:
+    // https://stackoverflow.com/questions/36543301/detecting-windows-10-version
 
-    // get the value of the WINDOWS environment variable
-    DWORD windowsDirLength = GetEnvironmentVariable("windir", windowsDir, sizeof(windowsDir));
+    #define STATUS_SUCCESS (0x00000000)
+    typedef LONG NTSTATUS;
+    typedef NTSTATUS (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
 
-    // this should be there, but use the likely default if it isn't.
-    if (windowsDirLength == 0)
+    HMODULE hMod = ::GetModuleHandleW(L"ntdll.dll");
+    if (hMod != NULL)
     {
-        strncpy(windowsDir, "C:\\Windows", sizeof(windowsDir));
-    }
-
-    // get the full path name of the kernel32.dll
-    snprintf(kernel32, sizeof(kernel32), "%s\\System32\\kernel32.dll", windowsDir);
-
-    // MS has deprecated GetVersionEx(). The only way to get the real version
-    // information now is by querying the version information of one of the system dlls.
-    DWORD  verHandle = 0;
-    UINT   size      = 0;
-    LPBYTE lpBuffer  = NULL;
-    // get the size of the version information for this dll.
-    DWORD  verSize   = GetFileVersionInfoSize(kernel32, &verHandle);
-
-    if (verSize != NULL)
-    {
-        LPSTR verData = new char[verSize];
-
-        // get the version information
-        if (GetFileVersionInfo(kernel32, verHandle, verSize, verData))
+        RtlGetVersionPtr fxPtr = (RtlGetVersionPtr)::GetProcAddress(hMod, "RtlGetVersion");
+        if (fxPtr != NULL)
         {
-            // the query the specific version information
-            if (VerQueryValue(verData, "\\", (void **)&lpBuffer, &size))
+            RTL_OSVERSIONINFOW rovi;
+            rovi.dwOSVersionInfoSize = sizeof(rovi);
+            if (fxPtr(&rovi) == STATUS_SUCCESS)
             {
-                if (size > 0)
-                {
-                    VS_FIXEDFILEINFO *verInfo = (VS_FIXEDFILEINFO *)lpBuffer;
-                    if (verInfo->dwSignature == 0xfeef04bd)
-                    {
-                        char retstr[256];
+                char retstr[256];
 
-                        // Doesn't matter if you are on 32 bit or 64 bit,
-                        // DWORD is always 32 bits, so first two revision numbers
-                        // come from dwFileVersionMS, last two come from dwFileVersionLS
-                        snprintf(retstr, sizeof(retstr), "Windows %d.%d.%d",
-                                 (verInfo->dwFileVersionMS >> 16) & 0xffff,
-                                 (verInfo->dwFileVersionMS >>  0) & 0xffff,
-                                 (verInfo->dwFileVersionLS >> 16) & 0xffff);
-
-                        delete[] verData;
-
-                        return context->NewStringFromAsciiz(retstr);
-                    }
-                }
+                snprintf(retstr, sizeof(retstr), "Windows %d.%d.%d",
+                 rovi.dwMajorVersion, rovi.dwMinorVersion, rovi.dwBuildNumber);
+                return context->String(retstr);
             }
         }
-        delete[] verData;
     }
-
-    // just return a NULL if not able to get this
+    // just return the nullstring if we fail
     return context->NullString();
 }
 
@@ -1388,68 +1361,49 @@ RexxRoutine0(RexxStringObject, SysWinVer)
 *                   rest of the screen.                                  *
 *                                                                        *
 * Return:    Characters read from text screen.                           *
+*                                                                        *
+* Note: The ReadConsoleOutputCharacter API is no longer recommended      *
 *************************************************************************/
 RexxRoutine3(RexxStringObject, SysTextScreenRead, int, row, int, col, OPTIONAL_int, len)
 {
-    int    lPos, lPosOffSet;              /* positioning                */
-    /* (132x50)                   */
-    int    lBufferLen = 16000;           /* default: 200x80 characters */
+    HANDLE h;                            // stdout handle
+    CONSOLE_SCREEN_BUFFER_INFO csbiInfo; // screen buffer size
+    AutoFree buffer;                     // return buffer
+    COORD start;                         // start coordinates
+    DWORD chars;                         // actual chars read
 
-    COORD coordLine;                     /* coordinates of where to    */
-    /* read characters from       */
-    DWORD dwCharsRead, dwSumCharsRead;    /* Handle to Standard Out     */
-    HANDLE hStdout;
-    CONSOLE_SCREEN_BUFFER_INFO csbiInfo; /* Console information        */
-
-    hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
-
-    if (!GetConsoleScreenBufferInfo(hStdout, &csbiInfo))
+    if (row < 0 || col < 0 || argumentExists(3) && len < 0 ||
+        (h = GetStdHandle(STD_OUTPUT_HANDLE)) == INVALID_HANDLE_VALUE)
     {
         context->InvalidRoutine();
         return NULLOBJECT;
     }
 
-    if (argumentOmitted(3))               /* check the length           */
+    // get screen buffer size if len argument is not given
+    if (argumentOmitted(3))
     {
+        if (GetConsoleScreenBufferInfo(h, &csbiInfo) == 0)
+        {
+            context->InvalidRoutine();
+            return NULLOBJECT;
+        }
         len = csbiInfo.dwSize.Y * csbiInfo.dwSize.X;
     }
 
-    coordLine.X = (short)col;
-    coordLine.Y = (short)row;
-
-    // allocate a new buffer
-    AutoFree ptr = (char *)malloc(len);
-    if (ptr == NULL)
+    if (len >= 0 && (buffer = (char *)malloc(len)) == NULL)
     {
         outOfMemoryException(context);
     }
 
-    if (len < lBufferLen)
+    start.X = (short)col;
+    start.Y = (short)row;
+    if (ReadConsoleOutputCharacter(h, buffer, len, start, &chars) == 0)
     {
-        lBufferLen = len;
+        context->InvalidRoutine();
+        return NULLOBJECT;
     }
 
-    lPos = 0;                                     /* current position */
-    lPosOffSet = row * csbiInfo.dwSize.X + col;   /* add offset if not started at beginning */
-    dwSumCharsRead = 0;
-
-    while (lPos < len)
-    {
-
-        if (!ReadConsoleOutputCharacter(hStdout, &ptr[lPos], lBufferLen, coordLine, &dwCharsRead))
-        {
-            context->InvalidRoutine();
-            return NULL;
-        }
-
-
-        lPos = lPos + lBufferLen;
-        coordLine.Y = (short)((lPos + lPosOffSet) / csbiInfo.dwSize.X);
-        coordLine.X = (short)((lPos + lPosOffSet) % csbiInfo.dwSize.X);
-        dwSumCharsRead = dwSumCharsRead + dwCharsRead;
-    }
-
-    return context->NewString(ptr, dwSumCharsRead);
+    return context->NewString(buffer, chars);
 }
 
 /*************************************************************************
@@ -1746,101 +1700,90 @@ RexxRoutine0(RexxStringObject, SysSystemDirectory)
 /*************************************************************************
 * Function:  SysFileSystemType                                           *
 *                                                                        *
-* Syntax:    result = SysFileSystemType("drive")                         *
+* Syntax:    result = SysFileSystemType([drive])                         *
 *                                                                        *
-* Params:    drive - drive letter (in form of 'D:')                      *
-*        or  none - current drive                                        *
+* Params:    drive - d, d:, d:\, \\share\path                            *
+*                    if omitted, defaults to current drive               *
 *                                                                        *
-* Return:    result - File System Name attached to the specified drive   *
-*                     (FAT, HPFS ....)                                   *
-*            '' - Empty string in case of any error                      *
+* Return:    result - the drive's file system (e. g. NTFS, FAT)          *
+*                     null string for any error                          *
 *************************************************************************/
 
 RexxRoutine1(RexxStringObject, SysFileSystemType, OPTIONAL_CSTRING, drive)
 {
-    CHAR chDriveLetter[4];
+    FileNameBuffer d;
 
     if (drive != NULL)
     {
-        size_t driveLen = strlen(drive);
-
-        if (driveLen == 0 || driveLen > 2 || (driveLen == 2 && drive[1] != ':'))
+        d = drive;
+        // We just let the Windows APIs handle all the different ways to
+        // specify a volume, like d:\, \\?\d:, \\localhost\path, etc.  But
+        // on top of that we support a single-character drive d.
+        if (d.length() == 1 && Utilities::isAlpha(d.at(0)))
         {
-            context->ThrowException1(Rexx_Error_Incorrect_call_user_defined, context->String("Invalid drive specification"));
+            // make this a valid drive specification
+            d += ":\\";
         }
-        snprintf(chDriveLetter, sizeof(chDriveLetter), "%c:\\", drive[0]);
-        drive = chDriveLetter;
+
+        // GetVolumeInformation() is picky, it requires a final backslash
+        if (d.length() > 0)
+        {
+            d.addFinalPathDelimiter();
+        }
     }
 
-
-    AutoErrorMode errorMode(SEM_FAILCRITICALERRORS);
-
-    char fileSystemName[MAX_PATH];
-
-    RexxStringObject result = context->NullString();
-
-    if (GetVolumeInformation(
-            drive,    // address of root directory of the file system
-            NULL,    // address of name of the volume
-            0,    // length of lpVolumeNameBuffer
-            NULL,    // address of volume serial number
-            NULL,    // address of system's maximum filename length
-            NULL,    // address of file system flags
-            fileSystemName,    // address of name of file system
-            sizeof(fileSystemName)     // length of lpFileSystemNameBuffer
-            ))
+    // get the file system type
+    char fileSystem[MAX_PATH];
+    if (GetVolumeInformation((drive == NULL) ? NULL : (char * )d, NULL, 0, NULL, NULL, NULL, fileSystem, sizeof(fileSystem)))
     {
-        result = context->NewStringFromAsciiz(fileSystemName);
+        return context->NewStringFromAsciiz(fileSystem);
     }
-
-    return result;
+    return context->NullString();
 }
 
 
 /*************************************************************************
 * Function:  SysVolumeLabel                                              *
 *                                                                        *
-* Syntax:    result = SysVolumeLabel("drive")                            *
+* Syntax:    result = SysVolumeLabel([drive])                            *
 *                                                                        *
-* Params:    drive - drive letter (in form of 'D:')                      *
-*        or  none - current drive                                        *
+* Params:    drive - d, d:, d:\, \\share\path                            *
+*                    if omitted, defaults to current drive               *
 *                                                                        *
-* Return     '' - Empty string in case of any error                      *
+* Return:    result - the volume label                                   *
+*                     null string for any error                          *
 *************************************************************************/
 
 RexxRoutine1(RexxStringObject, SysVolumeLabel, OPTIONAL_CSTRING, drive)
 {
-    CHAR chDriveLetter[4];
+    FileNameBuffer d;
+
     if (drive != NULL)
     {
-        size_t driveLen = strlen(drive);
-
-        if (driveLen == 0 || driveLen > 2 || (driveLen == 2 && drive[1] != ':'))
+        d = drive;
+        // We just let the Windows APIs handle all the different ways to
+        // specify a volume, like d:\, \\?\d:, \\localhost\path, etc.  But
+        // on top of that we support a single-character drive d.
+        if (d.length() == 1 && Utilities::isAlpha(d.at(0)))
         {
-            context->ThrowException1(Rexx_Error_Incorrect_call_user_defined, context->String("Invalid drive specification"));
+            // make this a valid drive specification
+            d += ":\\";
         }
-        snprintf(chDriveLetter, sizeof(chDriveLetter), "%c:\\", drive[0]);
-        drive = chDriveLetter;
+
+        // GetVolumeInformation() is picky, it requires a final backslash
+        if (d.length() > 0)
+        {
+            d.addFinalPathDelimiter();
+        }
     }
+
+    // get the volume label
     char volumeName[MAX_PATH];
-
-    RexxStringObject result = context->NullString();
-
-    if (GetVolumeInformation(
-            drive,           /* address of root directory of the file system */
-            volumeName,                      /*address of name of the volume */
-            sizeof(volumeName),              /* length of lpVolumeNameBuffer */
-            NULL,                         /* address of volume serial number */
-            NULL,             /* address of system's maximum filename length */
-            NULL,                            /* address of file system flags */
-            NULL,                          /* address of name of file system */
-            0                            /* length of lpFileSystemNameBuffer */
-            ))
+    if (GetVolumeInformation((drive == NULL) ? NULL : (char * )d, volumeName, sizeof(volumeName), NULL, NULL, NULL, NULL, 0))
     {
-        result = context->NewStringFromAsciiz(volumeName);
+        return context->NewStringFromAsciiz(volumeName);
     }
-
-    return result;
+    return context->NullString();
 }
 
 
@@ -2609,7 +2552,7 @@ RexxRoutine3(int, SysSetFileDateTime, CSTRING, name, OPTIONAL_CSTRING, newdate, 
         CloseHandle(setFile);
     }
 
-    return fOk ? 0 : 1;
+    return fOk ? 0 : -1;
 }
 
 /*************************************************************************
@@ -2625,11 +2568,9 @@ RexxRoutine3(int, SysSetFileDateTime, CSTRING, name, OPTIONAL_CSTRING, newdate, 
 
 RexxRoutine2(RexxObjectPtr, SysGetFileDateTime, CSTRING, name, OPTIONAL_CSTRING, selector)
 {
+    SysFileSystem::FiletimeType type;
     FILETIME  sFileTime;
     FILETIME  sLocalFileTime;
-    FILETIME  *psFileCreated = NULL;
-    FILETIME  *psFileAccessed = NULL;
-    FILETIME  *psFileWritten = NULL;
     SYSTEMTIME sLocalSysTime;
 
     if (selector != NULL)
@@ -2638,15 +2579,15 @@ RexxRoutine2(RexxObjectPtr, SysGetFileDateTime, CSTRING, name, OPTIONAL_CSTRING,
         {
             case 'c':
             case 'C':
-                psFileCreated = &sFileTime;
+                type = SysFileSystem::FiletimeCreation;
                 break;
             case 'a':
             case 'A':
-                psFileAccessed = &sFileTime;
+                type = SysFileSystem::FiletimeAccess;
                 break;
             case 'w':
             case 'W':
-                psFileWritten = &sFileTime;
+                type = SysFileSystem::FiletimeWrite;
                 break;
             default:
                 invalidOptionException(context, "SysGetFileDateTime", "time selector", "'A', 'C', or 'W'", selector);
@@ -2654,36 +2595,24 @@ RexxRoutine2(RexxObjectPtr, SysGetFileDateTime, CSTRING, name, OPTIONAL_CSTRING,
     }
     else
     {
-        psFileWritten = &sFileTime;
+        type = SysFileSystem::FiletimeWrite;
     }
 
-    /* open file for read to query time */
-    HANDLE setFile = CreateFile(name, FILE_READ_ATTRIBUTES,
-                                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH |
-                                FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if (setFile != INVALID_HANDLE_VALUE)
+    if (SysFileSystem::getFiletime(name, type, &sFileTime) &&
+        FileTimeToLocalFileTime(&sFileTime, &sLocalFileTime) &&
+        FileTimeToSystemTime(&sLocalFileTime, &sLocalSysTime))
     {
-        BOOL fOk = GetFileTime(setFile, psFileCreated, psFileAccessed, psFileWritten);
-        CloseHandle(setFile);
-        fOk &= FileTimeToLocalFileTime(&sFileTime, &sLocalFileTime);
-        fOk &= FileTimeToSystemTime(&sLocalFileTime, &sLocalSysTime);
-
-        if (fOk)
-        {
-            char buffer[256];
-            snprintf(buffer, sizeof(buffer), "%4d-%02d-%02d %02d:%02d:%02d",
-                    sLocalSysTime.wYear,
-                    sLocalSysTime.wMonth,
-                    sLocalSysTime.wDay,
-                    sLocalSysTime.wHour,
-                    sLocalSysTime.wMinute,
-                    sLocalSysTime.wSecond);
-            return context->String(buffer);
-        }
+        char buffer[256];
+        snprintf(buffer, sizeof(buffer), "%4d-%02d-%02d %02d:%02d:%02d",
+                sLocalSysTime.wYear,
+                sLocalSysTime.wMonth,
+                sLocalSysTime.wDay,
+                sLocalSysTime.wHour,
+                sLocalSysTime.wMinute,
+                sLocalSysTime.wSecond);
+        return context->String(buffer);
     }
     return context->WholeNumber(-1);
-
 }
 
 
@@ -3147,7 +3076,7 @@ RexxRoutine4(int, SysToUniCode, RexxStringObject, source, OPTIONAL_CSTRING, code
 * Return:    error number                                                *
 *************************************************************************/
 
-RexxRoutine1(uint32_t, SysWinGetPrinters, RexxStemObject, stem)
+RexxRoutine1(uint32_t, SysWinGetPrinters, RexxObjectPtr, stem)
 {
     DWORD realSize = 0;
     DWORD entries = 0;
@@ -3181,7 +3110,7 @@ RexxRoutine1(uint32_t, SysWinGetPrinters, RexxStemObject, stem)
         pArray.realloc(currentSize);
     }
 
-    StemHandler stemVariable(context, stem);
+    StemHandler stemVariable(context, stem, 1);
 
     PRINTER_INFO_2 *pResult = (PRINTER_INFO_2 *)(char *)pArray;
 
@@ -3301,7 +3230,7 @@ RexxRoutine1(int, SysWinSetDefaultPrinter, CSTRING, printer)
 
 RexxRoutine1(logical_t, SysIsFileCompressed, CSTRING, file)
 {
-    DWORD dwAttrs = GetFileAttributes(file);
+    DWORD dwAttrs = SysFileSystem::getFileAttributes(file);
     return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_COMPRESSED);
 }
 
@@ -3317,7 +3246,7 @@ RexxRoutine1(logical_t, SysIsFileCompressed, CSTRING, file)
 
 RexxRoutine1(logical_t, SysIsFileEncrypted, CSTRING, file)
 {
-    DWORD dwAttrs = GetFileAttributes(file);
+    DWORD dwAttrs = SysFileSystem::getFileAttributes(file);
     return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_ENCRYPTED);
 }
 
@@ -3334,7 +3263,7 @@ RexxRoutine1(logical_t, SysIsFileEncrypted, CSTRING, file)
 
 RexxRoutine1(logical_t, SysIsFileNotContentIndexed, CSTRING, file)
 {
-    DWORD dwAttrs = GetFileAttributes(file);
+    DWORD dwAttrs = SysFileSystem::getFileAttributes(file);
     return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
 }
 
@@ -3350,7 +3279,7 @@ RexxRoutine1(logical_t, SysIsFileNotContentIndexed, CSTRING, file)
 
 RexxRoutine1(logical_t, SysIsFileOffline, CSTRING, file)
 {
-    DWORD dwAttrs = GetFileAttributes(file);
+    DWORD dwAttrs = SysFileSystem::getFileAttributes(file);
     return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_OFFLINE);
 }
 
@@ -3366,7 +3295,7 @@ RexxRoutine1(logical_t, SysIsFileOffline, CSTRING, file)
 
 RexxRoutine1(logical_t, SysIsFileSparse, CSTRING, file)
 {
-    DWORD dwAttrs = GetFileAttributes(file);
+    DWORD dwAttrs = SysFileSystem::getFileAttributes(file);
     return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_SPARSE_FILE);
 }
 
@@ -3383,7 +3312,7 @@ RexxRoutine1(logical_t, SysIsFileSparse, CSTRING, file)
 
 RexxRoutine1(logical_t, SysIsFileTemporary, CSTRING, file)
 {
-    DWORD dwAttrs = GetFileAttributes(file);
+    DWORD dwAttrs = SysFileSystem::getFileAttributes(file);
     return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_TEMPORARY);
 }
 

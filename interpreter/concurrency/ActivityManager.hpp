@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -189,6 +189,9 @@ protected:
     static bool              processTerminating;      // shutdown processing started
     static size_t            interpreterInstances;    // number of times an interpreter has been created.
 
+     // IMPORTANT NOTE: To avoid deadlocks, never request the kernel lock while holding the resourceLock,
+     // otherwise deadlocks are possible. It is permissible to request the resource lock while holding the
+     // kernel lock, but this ordering must be strictly observed.
     static SysMutex          kernelSemaphore;         // global kernel semaphore lock
     static SysSemaphore      terminationSem;          // used to signal that everything has shutdown
     static volatile bool sentinel;                    // used to ensure proper ordering of updates

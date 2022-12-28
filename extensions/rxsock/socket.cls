@@ -1,13 +1,11 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Description: Simple classes to encalsulate stream sockets.                 */
-/*                                                                            */
-/* Copyright (c) 2007-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2007-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -35,9 +33,9 @@
 /* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS         */
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.               */
 /*                                                                            */
-/* Author: W. David Ashley                                                    */
-/*                                                                            */
 /*----------------------------------------------------------------------------*/
+
+/* Description: Simple classes to encalsulate stream sockets.                 */
 
 ::requires "rxsock" LIBRARY    -- need the rxsock library available to function
 
@@ -76,9 +74,6 @@
 /*        Class methods                                                       */
 /*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
-
-
--- complete the class initialization
 
 /*----------------------------------------------------------------------------*/
 /* Method: gethostbyaddr                                                      */
@@ -254,11 +249,11 @@ name = name~upper()
 if .SocketOptions~optionNames~hasItem(name) = .false then ,
  raise syntax 93.914 array (1, .SocketOptions~optionNames~makeArray~toString, name)
 -- get the value
-retc = SockGetSockOpt(s, 'SOL_SOCKET', name, 'xxx')
+retc = SockGetSockOpt(s, 'SOL_SOCKET', name, "value")
 -- some values may not be gettable
 if retc = -1 then
    return .nil
-return retc
+return value
 
 /*----------------------------------------------------------------------------*/
 /* Method: getPeerName                                                        */
@@ -314,7 +309,7 @@ type= type~upper()
 protocol = protocol~upper()
 -- check arguments
 if .SocketOptions~domainNames~hasItem(domain) = .false then ,
- raise syntax 93.914 array ('domain', .SocketOptions~domainNames~domainNames~makearray~toString, domain)
+ raise syntax 93.914 array ('domain', .SocketOptions~domainNames~makearray~toString, domain)
 if .SocketOptions~domainTypes~hasItem(type) = .false then ,
  raise syntax 93.914 array ('type', .SocketOptions~domainTypes~makearray~toString, type)
 if .SocketOptions~protocols~hasItem(protocol) = .false then ,
@@ -683,4 +678,3 @@ do i = 1 to alias~items()
    stem.!alias.i = alias[i]
    end
 return stem.
-

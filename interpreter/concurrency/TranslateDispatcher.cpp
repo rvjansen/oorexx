@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -67,7 +67,7 @@ void TranslateDispatcher::run()
     // if not an instore request, then this must be a resolvable name
     if (instore == NULL)
     {
-        Protected<RexxString> fullname = activity->resolveProgramName(name, OREF_NULL, OREF_NULL);
+        Protected<RexxString> fullname = activity->resolveProgramName(name, OREF_NULL, OREF_NULL, RESOLVE_DEFAULT);
         if (fullname == OREF_NULL)
         {
             reportException(Error_Program_unreadable_notfound, name);

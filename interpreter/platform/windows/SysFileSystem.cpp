@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -136,7 +136,17 @@ bool SysFileSystem::searchFileName(const char *name, FileNameBuffer &fullName)
 bool SysFileSystem::getFullPathName(const char *name, FileNameBuffer &fullName)
 {
     // now try for original name
-    AutoErrorMode errorMode(SEM_FAILCRITICALERRORS);
+    if (name[0] == '\\' && name[1] == '\\' && name[2] == '?' && name[3] == '\\')
+    {
+       // if name starts with the Win32 namespace prefix \\?\ this may
+       // be a request for a long (or otherwise subtle) path which
+       // GetFullPathName() doesn't support, so we just pass through
+       // see also
+       // Naming Files, Paths, and Namespaces: https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+       // File path formats on Windows systems: https://docs.microsoft.com/en-us/dotnet/standard/io/file-path-formats
+       fullName = name;
+       return true;
+    }
 
     DWORD rc = GetFullPathName(name, (DWORD)fullName.capacity(), (LPTSTR)fullName, NULL);
     // it is possible that the filename is good, but the buffer was too small to hold the result
@@ -170,7 +180,6 @@ bool SysFileSystem::getFullPathName(const char *name, FileNameBuffer &fullName)
 bool SysFileSystem::searchOnPath(const char *name, const char *path, const char *extension, FileNameBuffer &fullName)
 {
     // now try for original name
-    AutoErrorMode errorMode(SEM_FAILCRITICALERRORS);
     LPSTR filePart;
 
     DWORD rc = SearchPath(path, name, extension, (DWORD)fullName.capacity(), fullName, &filePart);
@@ -189,7 +198,6 @@ bool SysFileSystem::searchOnPath(const char *name, const char *path, const char 
     }
 
     return rc > 0;
-
 }
 
 
@@ -209,9 +217,7 @@ void SysFileSystem::qualifyStreamName(const char *unqualifiedName, FileNameBuffe
         return;
     }
 
-    // similar to the Unix behaviour, we return the current directory
-    // if 'unqualifiedName' is the null string
-    if (getFullPathName((unqualifiedName[0] == '\0') ? "." : unqualifiedName, qualifiedName))
+    if (getFullPathName(unqualifiedName, qualifiedName))
     {
         // qualifying a Windows device like "aux", "con" or "nul" (even when written in
         // the form "xxx:" or /dir/xxx" etc.) will return the device name with a leading
@@ -231,39 +237,77 @@ void SysFileSystem::qualifyStreamName(const char *unqualifiedName, FileNameBuffe
 
 
 /**
- * Perform a "find first" operation for a file.
+ * Get attribute flags for a file with the given name.
  *
- * @param name   the target name (may include wildcard characters)
+ * @param name   The name to check.
  *
- * @return true if a file was located, false if not.
+ * @return File attribute flags if the file exists,
+ *         INVALID_FILE_ATTRIBUTES otherwise.
  */
-bool SysFileSystem::findFirstFile(const char *name)
+DWORD SysFileSystem::getFileAttributes(const char *name)
 {
-    HANDLE FindHandle;
-    WIN32_FIND_DATA FindData;
+    DWORD dwAttrib = GetFileAttributes(name);
 
-    AutoErrorMode errorMode(SEM_FAILCRITICALERRORS);
-    FindHandle = FindFirstFile(name, &FindData);
-
-    if (FindHandle != INVALID_HANDLE_VALUE)
+    // For system files like hiberfil.sys GetFileAttributes fails with
+    // ERROR_SHARING_VIOLATION (The process cannot access the file because it is
+    // being used by another process).  In this case FindFirstFile is still able
+    // to return attributes (we don't use it in the first place as it is slower).
+    if (dwAttrib == INVALID_FILE_ATTRIBUTES &&
+        GetLastError() == ERROR_SHARING_VIOLATION)
     {
-        FindClose(FindHandle);
-        if ((FindData.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM)
-            || (FindData.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)
-            || (FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        WIN32_FIND_DATA findData;
+        HANDLE hFind = FindFirstFile(name, &findData);
+        if (hFind != INVALID_HANDLE_VALUE)
         {
-            return false;
+            dwAttrib = findData.dwFileAttributes;
+            FindClose(hFind);
         }
-        else
+    }
+    return dwAttrib;
+}
+
+
+/**
+ * Get the FILETIME for a file with the given name.
+ *
+ * @param name   The name to check.
+ * @param type   The type of FILETIME to return.
+ *               Can be FiletimeAccess, FiletimeWrite, or FiletimeCreation
+ * @param time   The returned FILETIME.
+ *
+ * @return true if the file exists, false otherwise.
+ */
+bool SysFileSystem::getFiletime(const char *name, FiletimeType type, FILETIME *time)
+{
+    WIN32_FILE_ATTRIBUTE_DATA stat;
+
+    if (GetFileAttributesEx(name, GetFileExInfoStandard, &stat))
+    {
+        *time = type == FiletimeAccess ? stat.ftLastAccessTime :
+               (type == FiletimeWrite ? stat.ftLastWriteTime : stat.ftCreationTime);
+        return true;
+    }
+
+    // For system files like hiberfil.sys GetFileAttributesEx fails with
+    // ERROR_SHARING_VIOLATION (The process cannot access the file because it is
+    // being used by another process).  In this case FindFirstFile is still able
+    // to return attributes (we don't use it in the first place as it is slower).
+    else if (GetLastError() == ERROR_SHARING_VIOLATION)
+    {
+        WIN32_FIND_DATA statFind;
+        HANDLE hFind = FindFirstFile(name, &statFind);
+        if (hFind != INVALID_HANDLE_VALUE)
         {
+            FindClose(hFind);
+            *time = type == FiletimeAccess ? statFind.ftLastAccessTime :
+                   (type == FiletimeWrite ? statFind.ftLastWriteTime : statFind.ftCreationTime);
             return true;
         }
     }
-    else
-    {
-        return false;
-    }
+    // we failed to retrieve the timestamp
+    return false;
 }
+
 
 /**
  * Check to see if a file with a given name exists.
@@ -274,12 +318,10 @@ bool SysFileSystem::findFirstFile(const char *name)
  */
 bool SysFileSystem::fileExists(const char *name)
 {
-    DWORD dwAttrib = GetFileAttributes(name);
+    DWORD dwAttrib = getFileAttributes(name);
 
     return (dwAttrib != INVALID_FILE_ATTRIBUTES &&
-         !((dwAttrib & FILE_ATTRIBUTE_SYSTEM)
-          || (dwAttrib & FILE_ATTRIBUTE_HIDDEN)
-          || (dwAttrib & FILE_ATTRIBUTE_DIRECTORY)));
+          !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 
@@ -294,7 +336,7 @@ bool SysFileSystem::fileExists(const char *name)
 bool SysFileSystem::isLink(const char *name)
 {
     DWORD dwAttrs = GetFileAttributes(name);
-    return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_REPARSE_POINT);
+    return (dwAttrs != INVALID_FILE_ATTRIBUTES) && (dwAttrs & FILE_ATTRIBUTE_REPARSE_POINT);
 }
 
 
@@ -486,7 +528,7 @@ bool SysFileSystem::primitiveSearchName(const char *name, const char *path, cons
         return checkCurrentFile(tempName, resolvedName);
     }
 
-    if (searchOnPath(name, path, extension, resolvedName))
+    if (searchOnPath(tempName, path, NULL, resolvedName))
     {
         return true;
     }
@@ -506,8 +548,10 @@ bool SysFileSystem::hasDirectory(const char *name)
 {
     // hasDirectory() means we have enough absolute directory
     // information at the beginning to bypass performing path searches.
-    // We really only need to look at the first character.
-    return name[0] == '\\' || name[0] == '.' || name[1] == ':';
+    // (there are more ways to specify a drive than just d: but still ..)
+    return name[0] == '\\' || name[1] == ':' ||
+          (name[0] == '.' && name[1] == '\\') ||
+          (name[0] == '.' && name[1] == '.' && name[2] == '\\');
 }
 
 
@@ -562,8 +606,8 @@ bool SysFileSystem::searchPath(const char *name, const char *path, FileNameBuffe
             getLongName(resolvedName);
             return true;
         }
-
     }
+    resolvedName = "";
     return false;        // not found
 }
 
@@ -577,6 +621,13 @@ bool SysFileSystem::searchPath(const char *name, const char *path, FileNameBuffe
  */
 void SysFileSystem::getLongName(FileNameBuffer &fullName)
 {
+    // GetLongPathName() and friends do not give a consistent case for the
+    // drive letter, so uppercase it if this path does have one.
+    if (fullName.length() >= 2 && fullName.at(1) == ':')
+    {
+        fullName.at(0) = toupper(fullName.at(0));
+    }
+
     DWORD length = GetLongPathName(fullName, fullName, (DWORD)fullName.capacity());
     if (length > (DWORD)fullName.capacity())
     {
@@ -602,8 +653,82 @@ void SysFileSystem::getLongName(FileNameBuffer &fullName)
             FindClose(hFind);
         }
     }
+    // we're processing a path that does not exist. Try to resolve as much of this as we can
+    else
+    {
+        getProperPathCase(fullName);
+    }
     return;
 }
+
+
+/**
+ * Resolve as much of the path as we can to obtain the path in
+ * Unfortunately, GetLongPathName() will preserve original case
+ * for both the file names and portions of the the path, so we
+ * need to step back through all of the elements of the path and
+ * resolve the actual case name of the element.
+ *
+ * @param fullName The source path name. This will be overwritten with the correct
+ *                 path on return.
+ */
+void SysFileSystem::getProperPathCase(FileNameBuffer &fullName)
+{
+    AutoFileNameBuffer buffer(fullName);
+
+    buffer = (const char *)fullName;
+
+    // we are only called because GetLongPathName() has already failed on the full path,
+    // so we need to back down one path element at a time until we find something that exists
+
+    while (true)
+    {
+        // scan back for the last backslash
+        const char *p = strrchr((const char *)buffer, '\\');
+        // if we can't find a back slash, then there's nothing we can fix up
+        if (p == NULL)
+        {
+            return;
+        }
+        size_t prefixLength = p - buffer;
+        // chop off the last path section
+        buffer.truncate(prefixLength);
+
+        // now try to see if we can resolve the full name for this section. If
+        // we can, then do the FindFirstFile trick to ensure the last bit is in the
+        // correct case
+        DWORD length = GetLongPathName(buffer, buffer, (DWORD)buffer.capacity());
+        if (length > (DWORD)buffer.capacity())
+        {
+            buffer.ensureCapacity(length);
+            length = GetLongPathName(buffer, buffer, length);
+        }
+
+        // if we got a result, then do a search for the file and
+        // truncate this to just the file name.
+        if (length != 0)
+        {
+            WIN32_FIND_DATA findData;
+            HANDLE hFind = FindFirstFile(buffer, &findData);
+            if (hFind != INVALID_HANDLE_VALUE)
+            {
+                p = strrchr((const char *)buffer, '\\');
+                if (p != NULL)
+                {
+                    buffer.truncate((p - buffer) + 1);
+                    buffer += findData.cFileName;
+                }
+                FindClose(hFind);
+                // add the sections we skipped to the part we we able to resolve
+                buffer += (const char *)fullName + prefixLength;
+                // and return this full name
+                fullName = buffer;
+                return;
+            }
+        }
+    }
+}
+
 
 
 /**
@@ -641,8 +766,8 @@ int SysFileSystem::deleteDirectory(const char *name)
  */
 bool SysFileSystem::isDirectory(const char *name)
 {
-    DWORD dwAttrs = GetFileAttributes(name);
-    return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_DIRECTORY);
+    DWORD dwAttrs = getFileAttributes(name);
+    return (dwAttrs != INVALID_FILE_ATTRIBUTES) && (dwAttrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 
@@ -656,7 +781,7 @@ bool SysFileSystem::isDirectory(const char *name)
 bool SysFileSystem::isReadOnly(const char *name)
 {
     DWORD dwAttrs = GetFileAttributes(name);
-    return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_READONLY);
+    return (dwAttrs != INVALID_FILE_ATTRIBUTES) && (dwAttrs & FILE_ATTRIBUTE_READONLY);
 }
 
 
@@ -745,8 +870,8 @@ bool SysFileSystem::canWrite(const char *name)
  */
 bool SysFileSystem::isFile(const char *name)
 {
-    DWORD dwAttrs = GetFileAttributes(name);
-    return (dwAttrs != 0xffffffff) && (dwAttrs & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0;
+    DWORD dwAttrs = getFileAttributes(name);
+    return (dwAttrs != INVALID_FILE_ATTRIBUTES) && (dwAttrs & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0;
 }
 
 
@@ -759,8 +884,8 @@ bool SysFileSystem::isFile(const char *name)
  */
 bool SysFileSystem::exists(const char *name)
 {
-    DWORD dwAttrs = GetFileAttributes(name);
-    return (dwAttrs != 0xffffffff);
+    DWORD dwAttrs = getFileAttributes(name);
+    return (dwAttrs != INVALID_FILE_ATTRIBUTES);
 }
 
 
@@ -774,25 +899,17 @@ bool SysFileSystem::exists(const char *name)
  */
 int64_t SysFileSystem::getLastModifiedDate(const char *name)
 {
-    HANDLE newHandle = CreateFile(name, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                  NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if ( newHandle == INVALID_HANDLE_VALUE )
+    FILETIME time, localTime;
+    if (getFiletime(name, FiletimeWrite, &time) &&
+        FileTimeToLocalFileTime(&time, &localTime))
+    {
+        // convert to ticks
+        return FileTimeToMicroseconds(localTime);
+    }
+    else
     {
         return NoTimeStamp;
     }
-
-    FILETIME lastWriteGetTime, lastWriteTime;
-    if ( !(GetFileTime(newHandle, NULL, NULL, &lastWriteGetTime) &&
-           FileTimeToLocalFileTime(&lastWriteGetTime, &lastWriteTime)) )
-    {
-        CloseHandle(newHandle);
-        return NoTimeStamp;
-    }
-
-    CloseHandle(newHandle);
-
-    // convert to ticks
-    return FileTimeToMicroseconds(lastWriteTime);
 }
 
 
@@ -806,25 +923,17 @@ int64_t SysFileSystem::getLastModifiedDate(const char *name)
  */
 int64_t SysFileSystem::getLastAccessDate(const char *name)
 {
-    HANDLE newHandle = CreateFile(name, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                  NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if ( newHandle == INVALID_HANDLE_VALUE )
+    FILETIME time, localTime;
+    if (getFiletime(name, FiletimeAccess, &time) &&
+        FileTimeToLocalFileTime(&time, &localTime))
+    {
+        // convert to ticks
+        return FileTimeToMicroseconds(localTime);
+    }
+    else
     {
         return NoTimeStamp;
     }
-
-    FILETIME fileLastAccessTime, lastAccessTime;
-    if ( !(GetFileTime(newHandle, NULL, &fileLastAccessTime, NULL) &&
-           FileTimeToLocalFileTime(&fileLastAccessTime, &lastAccessTime)) )
-    {
-        CloseHandle(newHandle);
-        return NoTimeStamp;
-    }
-
-    CloseHandle(newHandle);
-
-    // convert to ticks
-    return FileTimeToMicroseconds(lastAccessTime);
 }
 
 
@@ -833,20 +942,47 @@ int64_t SysFileSystem::getLastAccessDate(const char *name)
  *
  * @param name   The name of the target file.
  *
- * @return the 64-bit file size.
+ * @return the 64-bit file size, or zero if not a valid file
  */
 int64_t SysFileSystem::getFileLength(const char *name)
 {
     WIN32_FILE_ATTRIBUTE_DATA stat;
+    DWORD high = 0, low = 0;
 
-    if ( GetFileAttributesEx(name, GetFileExInfoStandard, &stat) == 0 )
+    if (GetFileAttributesEx(name, GetFileExInfoStandard, &stat))
     {
-        return 0;
+        // if this is a directory we cannot retrieve a file size
+        // these fields do not have a meaning for directories
+        if ((stat.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        {
+            high = stat.nFileSizeHigh;
+            low = stat.nFileSizeLow;
+        }
     }
 
-    int64_t result = ((int64_t)stat.nFileSizeHigh) << 32;
-    result += (int64_t)stat.nFileSizeLow;
-    return result;
+    // For system files like hiberfil.sys GetFileAttributesEx fails with
+    // ERROR_SHARING_VIOLATION (The process cannot access the file because it is
+    // being used by another process).  In this case FindFirstFile is still able
+    // to return attributes (we don't use it in the first place as it is slower).
+    else if (GetLastError() == ERROR_SHARING_VIOLATION)
+    {
+        WIN32_FIND_DATA statFind;
+
+        HANDLE hFind = FindFirstFile(name, &statFind);
+        if (hFind != INVALID_HANDLE_VALUE)
+        {
+            FindClose(hFind);
+            // if this is a directory we cannot retrieve a file size
+            // for directories these fields have no meaning
+            if ((statFind.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+            {
+                high = statFind.nFileSizeHigh;
+                low = statFind.nFileSizeLow;
+            }
+        }
+    }
+    // returns file size if a valid file, otherwise returns 0
+    return (((int64_t)high) << 32) + ((int64_t)low);
 }
 
 
@@ -872,8 +1008,8 @@ bool SysFileSystem::makeDirectory(const char *name)
  */
 bool SysFileSystem::isHidden(const char *name)
 {
-    DWORD dwAttrs = GetFileAttributes(name);
-    return (dwAttrs != 0xffffffff) && (dwAttrs & FILE_ATTRIBUTE_HIDDEN);
+    DWORD dwAttrs = getFileAttributes(name);
+    return (dwAttrs != INVALID_FILE_ATTRIBUTES) && (dwAttrs & FILE_ATTRIBUTE_HIDDEN);
 }
 
 
@@ -895,7 +1031,7 @@ bool SysFileSystem::setLastModifiedDate(const char *name, int64_t time)
      */
     DWORD flags = FILE_ATTRIBUTE_NORMAL;
     int result = GetFileAttributes(name);
-    if ( result == 0xFFFFFFFF )
+    if (result == INVALID_FILE_ATTRIBUTES)
     {
         return false;
     }
@@ -946,7 +1082,7 @@ bool SysFileSystem::setLastAccessDate(const char *name, int64_t time)
      */
     DWORD flags = FILE_ATTRIBUTE_NORMAL;
     int result = GetFileAttributes(name);
-    if (result == 0xFFFFFFFF)
+    if (result == INVALID_FILE_ATTRIBUTES)
     {
         return false;
     }
@@ -989,7 +1125,7 @@ bool SysFileSystem::setLastAccessDate(const char *name, int64_t time)
 bool SysFileSystem::setFileReadOnly(const char *name)
 {
     DWORD attrs = GetFileAttributes(name);
-    if (attrs == 0xFFFFFFFF)
+    if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         return false;
     }
@@ -1009,7 +1145,7 @@ bool SysFileSystem::setFileReadOnly(const char *name)
 bool SysFileSystem::setFileWritable(const char *name)
 {
     DWORD attrs = GetFileAttributes(name);
-    if (attrs == 0xFFFFFFFF)
+    if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         return false;
     }
@@ -1023,22 +1159,80 @@ bool SysFileSystem::setFileWritable(const char *name)
 /**
  * indicate whether the file system is case sensitive.
  *
- * @return For Windows, always returns false.
+ * @return For Windows, the case-sensitivity of the Windows system
+ *         directory is returned, typically C:\Windows\system32
  */
 bool SysFileSystem::isCaseSensitive()
 {
-    return false;
+    char system[SysFileSystem::MaximumPathLength];
+
+    GetSystemDirectory(system, sizeof(system));
+    return isCaseSensitive(system);
 }
 
 
 /**
- * test if an individual file is a case sensitive name
+ * Test if a file or directory is case-sensitive.
  *
- * @return For Windows, always returns false.
+ * On Windows, case-sensitivity is defined on a per-directory basis.
+ * Once a directory has been set as case-sensitive, files in this
+ * directory and any newly created subdirectories within this directory
+ * become case-sensitive.  Existing subdirectories and files within
+ * those existing subdirectories stay as they are.
+ *
+ * @return true if this is a case-sensitive directory, or a file within a
+ *              case-sensitive directory, false otherwise.
  */
 bool SysFileSystem::isCaseSensitive(const char *name)
 {
-    return false;
+    // Starting with Windows 10 build 17093, if the Windows Subsystem for Linux
+    // is enabled, a per-directory case sensitivity can be set with the command
+    // fsutil file setCaseSensitiveInfo <path> enable.
+    // As of 10/2020 there's only scarce information available on the API
+    // to query the case-sensitivity of a directory.  It seems that
+    // GetFileInformationByHandleEx() will be enhanced as follows:
+    // typedef enum _FILE_INFO_BY_HANDLE_CLASS will include a new
+    //     FileCaseSensitiveInfo Int32 with value 23
+    // plus the following structure is to return the value
+    // typedef struct _FILE_CASE_SENSITIVE_INFO {
+    //     ULONG Flags;
+    // } FILE_CASE_SENSITIVE_INFO, *PFILE_CASE_SENSITIVE_INFO;
+#define future_FileCaseSensitiveInfo (FILE_INFO_BY_HANDLE_CLASS)23
+    typedef struct _future_FILE_CASE_SENSITIVE_INFO {
+        ULONG Flags;
+    } future_FILE_CASE_SENSITIVE_INFO;
+
+    future_FILE_CASE_SENSITIVE_INFO stat;
+
+    AutoFree tmp = strdup(name);
+
+    while (!isDirectory(tmp))
+    {
+        size_t len = strlen(tmp);
+        // scan backwards to find the previous directory delimiter
+        for (; len > 1; len--)
+        {
+            // is this the directory delimiter?
+            if (tmp[len] == '\\')
+            {
+                // don't go beyond root backslash
+                tmp[tmp[len - 1] == ':' ? len + 1 : len] = '\0';
+                break;
+            }
+        }
+    }
+    // at this point the tmp variable should name an existing directory
+
+    HANDLE handle = CreateFile(tmp, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (handle == INVALID_HANDLE_VALUE)
+    {
+        return false;
+    }
+    bool success = GetFileInformationByHandleEx(handle, future_FileCaseSensitiveInfo,
+        &stat, sizeof(future_FILE_CASE_SENSITIVE_INFO));
+    CloseHandle(handle);
+    return success ? stat.Flags != 0 : false;
 }
 
 
@@ -1384,8 +1578,9 @@ void SysFileIterator::filterShortNames()
         return;
     }
 
-    // use fnmatch() to handle all of the globbing
-    while (!PathMatchSpec(findFileData.cFileName, fileSpec))
+    // PathMatchSpec seems to treat fileSpec as a semicolon-delimited list
+    // We must use the Ex version
+    while (S_FALSE == PathMatchSpecEx(findFileData.cFileName, fileSpec, PMSF_NORMAL))
     {
         // now locate the next one
         if (!FindNextFile(handle, &findFileData))

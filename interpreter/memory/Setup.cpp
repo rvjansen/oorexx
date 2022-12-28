@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -1267,6 +1267,7 @@ AddMethod("maxPathLength", RexxInfo::getMaxPathLength, 0);
 AddMethod("maxArraySize", RexxInfo::getMaxArraySize, 0);
         AddMethod("executable", RexxInfo::getRexxExecutable, 0);
         AddMethod("libraryPath", RexxInfo::getRexxLibrary, 0);
+AddMethod("debug", RexxInfo::getDebug, 0);
 
 CompleteMethodDefinitions();
 
@@ -1318,7 +1319,6 @@ AddClassMethod("New", EventSemaphoreClass::newRexx, A_COUNT);
 
 CompleteClassMethodDefinitions();
 
-AddUnguardedMethod("Close", EventSemaphoreClass::close, 0);
 AddMethod("Uninit", EventSemaphoreClass::close, 0);
 AddUnguardedMethod("Post", EventSemaphoreClass::post, 0);
 AddUnguardedMethod("Reset", EventSemaphoreClass::reset, 0);
@@ -1342,7 +1342,6 @@ AddClassMethod("New", MutexSemaphoreClass::newRexx, A_COUNT);
 
 CompleteClassMethodDefinitions();
 
-AddUnguardedMethod("Close", MutexSemaphoreClass::close, 0);
 AddMethod("Uninit", MutexSemaphoreClass::close, 0);
 AddUnguardedMethod("Release", MutexSemaphoreClass::release, 0);
 AddUnguardedMethod("Acquire", MutexSemaphoreClass::request, 1);
@@ -1476,121 +1475,123 @@ EndClassDefinition(MutableBuffer);
 
 StartClassDefinition(Integer)
 
-    // NOTE that we are pointing the new method at the String version...part of the
-    // fakeout that the Integer class does.
-        AddClassMethod("New", RexxString::newRexx, A_COUNT);
+// NOTE that we are pointing the new method at the String version...part of the
+// fakeout that the Integer class does.
+AddClassMethod("New", RexxString::newRexx, A_COUNT);
 
-    CompleteClassMethodDefinitions();
+CompleteClassMethodDefinitions();
 
-        AddMethod("+", RexxInteger::plus, 1);
-        AddMethod("-", RexxInteger::minus, 1);
-        AddMethod("*", RexxInteger::multiply, 1);
-        AddMethod("**", RexxInteger::power, 1);
-        AddMethod("/", RexxInteger::divide, 1);
-        AddMethod("%", RexxInteger::integerDivide, 1);
-        AddMethod("//", RexxInteger::remainder, 1);
-        AddMethod("\\", RexxInteger::notOp, 0);
-        AddMethod("&", RexxInteger::andOp, 1);
-        AddMethod("|", RexxInteger::orOp, 1);
-        AddMethod("&&", RexxInteger::xorOp, 1);
-        AddMethod("?", RexxInteger::choiceRexx, 2);
-        AddMethod("D2C", RexxInteger::d2c, 1);
-        AddMethod("D2X", RexxInteger::d2x, 1);
-        AddMethod("Abs", RexxInteger::abs, 0);
-        AddMethod("Max", RexxInteger::Max, A_COUNT);
-        AddMethod("Min", RexxInteger::Min, A_COUNT);
-        AddMethod("Sign", RexxInteger::sign, 0);
-        AddMethod("Equal", RexxInteger::equal, 1);
-        AddMethod("\\=", RexxInteger::notEqual, 1);
-        AddMethod("<>", RexxInteger::notEqual, 1);
-        AddMethod("><", RexxInteger::notEqual, 1);
-        AddMethod(">", RexxInteger::isGreaterThan, 1);
-        AddMethod("<", RexxInteger::isLessThan, 1);
-        AddMethod(">=", RexxInteger::isGreaterOrEqual, 1);
-        AddMethod("\\<", RexxInteger::isGreaterOrEqual, 1);
-        AddMethod("<=", RexxInteger::isLessOrEqual, 1);
-        AddMethod("\\>", RexxInteger::isLessOrEqual, 1);
-        AddMethod("==", RexxInteger::strictEqual, 1);
-        AddMethod("HashCode", RexxInteger::hashCode, 0);
-        AddMethod("\\==", RexxInteger::strictNotEqual, 1);
-        AddMethod(">>", RexxInteger::strictGreaterThan, 1);
-        AddMethod("<<", RexxInteger::strictLessThan, 1);
-        AddMethod(">>=", RexxInteger::strictGreaterOrEqual, 1);
-        AddMethod("\\<<", RexxInteger::strictGreaterOrEqual, 1);
-        AddMethod("<<=", RexxInteger::strictLessOrEqual, 1);
-        AddMethod("\\>>", RexxInteger::strictLessOrEqual, 1);
-        AddMethod("MakeString", RexxObject::makeStringRexx, 0);
-        AddMethod("Format", RexxInteger::format, 4);
-        AddMethod("Trunc", RexxInteger::trunc, 1);
-        AddMethod("modulo", RexxInteger::modulo, 1);
-        AddMethod("Floor", RexxInteger::floor, 0);
-        AddMethod("Ceiling", RexxInteger::ceiling, 0);
-        AddMethod("Round", RexxInteger::round, 0);
-        AddMethod("Class", RexxInteger::classObject, 0);
+AddMethod("+", RexxInteger::plus, 1);
+AddMethod("-", RexxInteger::minus, 1);
+AddMethod("*", RexxInteger::multiply, 1);
+AddMethod("**", RexxInteger::power, 1);
+AddMethod("/", RexxInteger::divide, 1);
+AddMethod("%", RexxInteger::integerDivide, 1);
+AddMethod("//", RexxInteger::remainder, 1);
+AddMethod("\\", RexxInteger::notOp, 0);
+AddMethod("&", RexxInteger::andOp, 1);
+AddMethod("|", RexxInteger::orOp, 1);
+AddMethod("&&", RexxInteger::xorOp, 1);
+AddMethod("?", RexxInteger::choiceRexx, 2);
+AddMethod("D2C", RexxInteger::d2c, 1);
+AddMethod("D2X", RexxInteger::d2x, 1);
+AddMethod("Abs", RexxInteger::abs, 0);
+AddMethod("Max", RexxInteger::Max, A_COUNT);
+AddMethod("Min", RexxInteger::Min, A_COUNT);
+AddMethod("Sign", RexxInteger::sign, 0);
+AddMethod("Equal", RexxInteger::equal, 1);
+AddMethod("=", RexxInteger::equal, 1);
+AddMethod("\\=", RexxInteger::notEqual, 1);
+AddMethod("<>", RexxInteger::notEqual, 1);
+AddMethod("><", RexxInteger::notEqual, 1);
+AddMethod(">", RexxInteger::isGreaterThan, 1);
+AddMethod("<", RexxInteger::isLessThan, 1);
+AddMethod(">=", RexxInteger::isGreaterOrEqual, 1);
+AddMethod("\\<", RexxInteger::isGreaterOrEqual, 1);
+AddMethod("<=", RexxInteger::isLessOrEqual, 1);
+AddMethod("\\>", RexxInteger::isLessOrEqual, 1);
+AddMethod("==", RexxInteger::strictEqual, 1);
+AddMethod("HashCode", RexxInteger::hashCode, 0);
+AddMethod("\\==", RexxInteger::strictNotEqual, 1);
+AddMethod(">>", RexxInteger::strictGreaterThan, 1);
+AddMethod("<<", RexxInteger::strictLessThan, 1);
+AddMethod(">>=", RexxInteger::strictGreaterOrEqual, 1);
+AddMethod("\\<<", RexxInteger::strictGreaterOrEqual, 1);
+AddMethod("<<=", RexxInteger::strictLessOrEqual, 1);
+AddMethod("\\>>", RexxInteger::strictLessOrEqual, 1);
+AddMethod("MakeString", RexxObject::makeStringRexx, 0);
+AddMethod("Format", RexxInteger::format, 4);
+AddMethod("Trunc", RexxInteger::trunc, 1);
+AddMethod("modulo", RexxInteger::modulo, 1);
+AddMethod("Floor", RexxInteger::floor, 0);
+AddMethod("Ceiling", RexxInteger::ceiling, 0);
+AddMethod("Round", RexxInteger::round, 0);
+AddMethod("Class", RexxInteger::classObject, 0);
 
-    CompleteMethodDefinitions();
+CompleteMethodDefinitions();
 
-    CompleteClassDefinition(Integer);
+CompleteClassDefinition(Integer);
 
 EndSpecialClassDefinition(Integer);
 
 
-    /***************************************************************************/
-    /*             NUMBERSTRING                                                */
-    /***************************************************************************/
+/***************************************************************************/
+/*             NUMBERSTRING                                                */
+/***************************************************************************/
 
 StartClassDefinition(NumberString)
 
-    // NOTE that we are pointing the new method at the String version...part of the
-    // fakeout that the NumberString class does.
-        AddClassMethod("New", RexxString::newRexx, A_COUNT);
+// NOTE that we are pointing the new method at the String version...part of the
+// fakeout that the NumberString class does.
+AddClassMethod("New", RexxString::newRexx, A_COUNT);
 
-    CompleteClassMethodDefinitions();
+CompleteClassMethodDefinitions();
 
-        AddMethod("Abs", NumberString::abs, 0);
-        AddMethod("Max", NumberString::Max, A_COUNT);
-        AddMethod("Min", NumberString::Min, A_COUNT);
-        AddMethod("Sign", NumberString::Sign, 0);
-        AddMethod("D2C", NumberString::d2c, 1);
-        AddMethod("D2X", NumberString::d2x, 1);
-        AddMethod("=", NumberString::equal, 1);
-        AddMethod("\\=", NumberString::notEqual, 1);
-        AddMethod("<>", NumberString::notEqual, 1);
-        AddMethod("><", NumberString::notEqual, 1);
-        AddMethod(">", NumberString::isGreaterThan, 1);
-        AddMethod("<", NumberString::isLessThan, 1);
-        AddMethod(">=", NumberString::isGreaterOrEqual, 1);
-        AddMethod("\\<", NumberString::isGreaterOrEqual, 1);
-        AddMethod("<=", NumberString::isLessOrEqual, 1);
-        AddMethod("\\>", NumberString::isLessOrEqual, 1);
-        AddMethod("==", NumberString::strictEqual, 1);
-        AddMethod("HashCode", NumberString::hashCode, 0);
-        AddMethod("\\==", NumberString::strictNotEqual, 1);
-        AddMethod(">>", NumberString::strictGreaterThan, 1);
-        AddMethod("<<", NumberString::strictLessThan, 1);
-        AddMethod(">>=", NumberString::strictGreaterOrEqual, 1);
-        AddMethod("\\<<", NumberString::strictGreaterOrEqual, 1);
-        AddMethod("<<=", NumberString::strictLessOrEqual, 1);
-        AddMethod("\\>>", NumberString::strictLessOrEqual, 1);
-        AddMethod("+", NumberString::plus, 1);
-        AddMethod("-", NumberString::minus, 1);
-        AddMethod("*", NumberString::multiply, 1);
-        AddMethod("**", NumberString::power, 1);
-        AddMethod("/", NumberString::divide, 1);
-        AddMethod("%", NumberString::integerDivide, 1);
-        AddMethod("//", NumberString::remainder, 1);
-        AddMethod("\\", NumberString::notOp, 0);
-        AddMethod("&", NumberString::andOp, 1);
-        AddMethod("|", NumberString::orOp, 1);
-        AddMethod("&&", NumberString::xorOp, 1);
-        AddMethod("MakeString", RexxObject::makeStringRexx, 0);
-        AddMethod("Format", NumberString::formatRexx, 4);
-        AddMethod("Trunc", NumberString::trunc, 1);
-        AddMethod("modulo", NumberString::modulo, 1);
-        AddMethod("Floor", NumberString::floor, 0);
-        AddMethod("Ceiling", NumberString::ceiling, 0);
-        AddMethod("Round", NumberString::round, 0);
-        AddMethod("Class", NumberString::classObject, 0);
+AddMethod("Abs", NumberString::abs, 0);
+AddMethod("Max", NumberString::Max, A_COUNT);
+AddMethod("Min", NumberString::Min, A_COUNT);
+AddMethod("Sign", NumberString::Sign, 0);
+AddMethod("D2C", NumberString::d2c, 1);
+AddMethod("D2X", NumberString::d2x, 1);
+AddMethod("Equal", NumberString::equal, 1);
+AddMethod("=", NumberString::equal, 1);
+AddMethod("\\=", NumberString::notEqual, 1);
+AddMethod("<>", NumberString::notEqual, 1);
+AddMethod("><", NumberString::notEqual, 1);
+AddMethod(">", NumberString::isGreaterThan, 1);
+AddMethod("<", NumberString::isLessThan, 1);
+AddMethod(">=", NumberString::isGreaterOrEqual, 1);
+AddMethod("\\<", NumberString::isGreaterOrEqual, 1);
+AddMethod("<=", NumberString::isLessOrEqual, 1);
+AddMethod("\\>", NumberString::isLessOrEqual, 1);
+AddMethod("==", NumberString::strictEqual, 1);
+AddMethod("HashCode", NumberString::hashCode, 0);
+AddMethod("\\==", NumberString::strictNotEqual, 1);
+AddMethod(">>", NumberString::strictGreaterThan, 1);
+AddMethod("<<", NumberString::strictLessThan, 1);
+AddMethod(">>=", NumberString::strictGreaterOrEqual, 1);
+AddMethod("\\<<", NumberString::strictGreaterOrEqual, 1);
+AddMethod("<<=", NumberString::strictLessOrEqual, 1);
+AddMethod("\\>>", NumberString::strictLessOrEqual, 1);
+AddMethod("+", NumberString::plus, 1);
+AddMethod("-", NumberString::minus, 1);
+AddMethod("*", NumberString::multiply, 1);
+AddMethod("**", NumberString::power, 1);
+AddMethod("/", NumberString::divide, 1);
+AddMethod("%", NumberString::integerDivide, 1);
+AddMethod("//", NumberString::remainder, 1);
+AddMethod("\\", NumberString::notOp, 0);
+AddMethod("&", NumberString::andOp, 1);
+AddMethod("|", NumberString::orOp, 1);
+AddMethod("&&", NumberString::xorOp, 1);
+AddMethod("MakeString", RexxObject::makeStringRexx, 0);
+AddMethod("Format", NumberString::formatRexx, 4);
+AddMethod("Trunc", NumberString::trunc, 1);
+AddMethod("modulo", NumberString::modulo, 1);
+AddMethod("Floor", NumberString::floor, 0);
+AddMethod("Ceiling", NumberString::ceiling, 0);
+AddMethod("Round", NumberString::round, 0);
+AddMethod("Class", NumberString::classObject, 0);
 
     CompleteMethodDefinitions();
 
@@ -1771,7 +1772,7 @@ EndClassDefinition(StackFrame);
             // CoreClasses contains additional classes written in Rexx and enhances some of the
             // base classes with methods written in Rexx.
             RexxString *symb = getGlobalName(BASEIMAGELOAD);
-            RexxString *programName = ActivityManager::currentActivity->resolveProgramName(symb, OREF_NULL, OREF_NULL);
+            RexxString *programName = ActivityManager::currentActivity->resolveProgramName(symb, OREF_NULL, OREF_NULL, RESOLVE_DEFAULT);
             // create a new stack frame to run under
             ActivityManager::currentActivity->createNewActivationStack();
             try

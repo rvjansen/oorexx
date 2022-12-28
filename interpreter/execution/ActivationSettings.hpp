@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -37,7 +37,7 @@
 /*----------------------------------------------------------------------------*/
 /******************************************************************************/
 /*                                                                            */
-/* Class to encapuslate the various settings that are shared between          */
+/* Class to encapsulate the various settings that are shared between          */
 /* activation instances.                                                      */
 /*                                                                            */
 /******************************************************************************/
@@ -127,6 +127,9 @@ class ActivationSettings
     public:
       inline ActivationSettings() {}
 
+      void live(size_t);
+      void liveGeneral(MarkReason reason);
+
       inline bool isForwarded() { return stateFlags[forwarded]; }
       inline void setForwarded(bool v = true) { stateFlags[forwarded] = v; }
       inline bool isGuarded() { return stateFlags[guardedMethod]; }
@@ -163,7 +166,7 @@ class ActivationSettings
       inline void setHaltCondition(bool v = true) { stateFlags[haltCondition] = v; }
 
       StringTable    *traps;               // enabled condition traps
-      StringTable    *ioConfigs;           // address envronment io configurations
+      StringTable    *ioConfigs;           // address environment io configurations
       DirectoryClass *conditionObj;        // current condition object
       RexxObject    **parentArgList;       // arguments to top level program
       size_t          parentArgCount;      // number of arguments to the top level program
@@ -188,6 +191,8 @@ class ActivationSettings
       int64_t elapsedTime;                 // elapsed time clock
       RexxDateTime timeStamp;              // current timestamp
       RexxLocalVariables localVariables;   // the local variables for this activation
+      StringTable    *fileNames;           // table of stream file names
+      bool caseInsensitive;                // !SysFileSystem::isCaseSensitive();
 };
 
 #endif

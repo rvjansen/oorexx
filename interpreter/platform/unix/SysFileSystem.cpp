@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -60,11 +60,14 @@
 #include <pwd.h>
 #include <errno.h>
 #include <fnmatch.h>
+#ifdef HAVE_FS_CASEFOLD_FL
+# include <linux/fs.h>
+# include <sys/ioctl.h>
+#endif
 #include "SysFileSystem.hpp"
 #include "Utilities.hpp"
 #include "ActivityManager.hpp"
 #include "FileNameBuffer.hpp"
-
 
 const char SysFileSystem::EOF_Marker = 0x1A;
 const char *SysFileSystem::EOL_Marker = "\n";
@@ -109,7 +112,7 @@ bool SysFileSystem::searchFileName(const char *name, FileNameBuffer &fullName)
         return false;
     }
     // now add on to the front of the name
-    fullName += "/";
+    fullName += '/';
     fullName += name;
 
     // if the file exists, then return it
@@ -132,7 +135,7 @@ bool SysFileSystem::searchFileName(const char *name, FileNameBuffer &fullName)
         /* try each entry in the PATH */
         int i = sep - currentPath;
         fullName.set(currentPath, i);
-        fullName += "/";
+        fullName += '/';
         fullName += name;
         if (fileExists(fullName) == true)
         {
@@ -353,8 +356,9 @@ bool SysFileSystem::hasDirectory(const char *name)
 {
     // hasDirectory() means we have enough absolute directory
     // information at the beginning to bypass performing path searches.
-    // We really only need to look at the first character.
-    return name[0] == '~' || name[0] == '/' || name[0] == '.';
+    return name[0] == '~' || name[0] == '/' ||
+          (name[0] == '.' && name[1] == '/') ||
+          (name[0] == '.' && name[1] == '.' && name[2] == '/');
 }
 
 
@@ -391,45 +395,33 @@ bool SysFileSystem::searchName(const char *name, const char *path, const char *e
  */
 bool SysFileSystem::primitiveSearchName(const char *name, const char *path, const char *extension, FileNameBuffer &resolvedName)
 {
-    FileNameBuffer tempName;
-    // construct the search name, potentially adding on an extension
-    tempName = name;
-    if (extension != NULL)
-    {
-        tempName += extension;
-    }
+    FileNameBuffer asIs, lower;
+    asIs = name;
+    lower = name;
+    Utilities::strlower((char *)lower);
+    // name may already be in lower case so we won't need a second iteration
+    int iterations = strcmp((char *)asIs, (char *)lower) == 0 ? 1 : 2;
 
-    // only do the direct search if this is qualified enough that
-    // it should not be located on the path
-    if (hasDirectory(tempName))
+    // for each name, check in both the provided case and lower case.
+    for (int i = 0; i < iterations; i++)
     {
-        for (int i = 0; i < 2; i++)
+        // construct the search name, potentially adding on an extension
+        // we always keep the extension in the case provided.
+        if (extension != NULL)
         {
-            // check the file as is first
-            if (checkCurrentFile(tempName, resolvedName))
-            {
-                return true;
-            }
-            // try again in lower case
-            Utilities::strlower((char *)tempName);
+            asIs += extension;
         }
-        return false;
-    }
-    else
-    {
-        // for each name, check in both the provided case and lower case.
-        for (int i = 0; i < 2; i++)
+
+        // do the direct search if this is qualified enough
+        // if not, try to locate it along the path
+        if (hasDirectory(asIs) ? checkCurrentFile(asIs, resolvedName) : searchPath(asIs, path, resolvedName))
         {
-            // go search along the path
-            if (searchPath(tempName, path, resolvedName))
-            {
-                return true;
-            }
-            // try again in lower case
-            Utilities::strlower((char *)tempName);
+            return true;
         }
-        return false;
+        // try again in lower case
+        asIs = lower;
     }
+    return false;
 }
 
 
@@ -450,22 +442,19 @@ bool SysFileSystem::checkCurrentFile(const char *name, FileNameBuffer &resolvedN
     // a failure here means an invalid name of some sort
     if (!canonicalizeName(resolvedName))
     {
+        resolvedName = "";
         return false;
     }
 
-    struct stat64 dummy;                 /* structure for stat system calls   */
-
-    // ok, if this exists, life is good.  Return it.
-    if (stat64(resolvedName, &dummy) == 0)           /* look for file         */
+    // this needs to exists and be a regular file
+    struct stat64 dummy;
+    if (stat64(resolvedName, &dummy) == 0 &&  S_ISREG(dummy.st_mode))
     {
-        // this needs to be a regular file
-        if (S_ISREG(dummy.st_mode))
-        {
-            return true;
-        }
-        return false;
+        return true;
     }
+
     // not found
+    resolvedName = "";
     return false;
 }
 
@@ -483,12 +472,20 @@ bool SysFileSystem::checkCurrentFile(const char *name, FileNameBuffer &resolvedN
  */
 bool SysFileSystem::searchPath(const char *name, const char *path, FileNameBuffer &resolvedName)
 {
+    // if we have enough absolute directory information at the beginning
+    // we can bypass performing path searches.
+    if (hasDirectory(name))
+    {
+        resolvedName = "";
+        return checkCurrentFile(name, resolvedName);
+    }
+
     // get an end pointer
     const char *pathEnd = path + strlen(path);
 
     const char *p = path;
     const char *q = strchr(p, ':');
-    /* For every dir in searchpath*/
+    // for each directory in searchpath
     for (; p < pathEnd; p = q + 1, q = strchr(p, ':'))
     {
         // it's possible we've hit the end, in which case, point the delimiter marker past the end of the
@@ -498,9 +495,17 @@ bool SysFileSystem::searchPath(const char *name, const char *path, FileNameBuffe
             q = pathEnd;
         }
         size_t subLength = q - p;
+        if (subLength == 0)
+        {
+            // case "::" in path
+            continue;
+        }
 
         resolvedName.set(p, subLength);
-        resolvedName += "/";
+        if (!resolvedName.endsWith('/'))
+        {
+            resolvedName += '/';
+        }
         resolvedName += name;
 
         // take care of any special conditions in the name structure
@@ -607,6 +612,12 @@ bool SysFileSystem::resolveTilde(FileNameBuffer &name)
  */
 bool SysFileSystem::canonicalizeName(FileNameBuffer &name)
 {
+    // the nullstring is an invalid filename; nothing we can do here
+    if (name.isEmpty())
+    {
+        return false;
+    }
+
     // does it start with the user home marker?
     if (name.startsWith('~'))
     {
@@ -626,7 +637,7 @@ bool SysFileSystem::canonicalizeName(FileNameBuffer &name)
         {
             return false;
         }
-        name += "/";
+        name += '/';
         name += tempName;
     }
 
@@ -905,49 +916,86 @@ bool SysFileSystem::isLink(const char *name)
 }
 
 
-/*
-  getLastModifiedDate / setLastModifiedDate helper function
-
-  loosely based on http://stackoverflow.com/questions/283166/easy-way-to-convert-a-struct-tm-expressed-in-utc-to-time-t-type
-  returns local timezone offset from UTC *including* DST offest in seconds
-*/
-int get_utc_offset(time_t time)
+/**
+ * helper function to convert UTC time to local time.
+ *
+ * @param utc    Calendar time (UTC) in seconds elapsed since 1970-01-01T00:00:00Z.
+ * @param loc    Local time in microseconds since 0001-01-01T00:00:00.
+ *
+ * @return true if local time can be converted to UTC, false otherwise.
+ */
+bool utcToLocal(time_t utc, int64_t *loc)
 {
     struct tm gmt, local;
-    int one_day = 24 * 60 * 60;
-    int offset;
+    int64_t offset;
 
-    // there seems to be no easy way to find the local timezone offset from UTC,
-    // including the DST offset, for a specific UTC time
-    // to calculate the UTC/DST offset we subtract the localtime() timestamp from
-    // the gmtime() timestamp
-    // NOTE: how this does/should work during the (typically) one-hour
-    //       DST transition period, remains to be investigated
-
-    gmtime_r(&time, &gmt);               // use re-entrant gmtime() version
-    localtime_r(&time, &local);          // use re-entrant localtime() version
+    // to calculate the UTC offset (including DST) we subtract the
+    // localtime() timestamp from the gmtime() timestamp
+    if (gmtime_r(&utc, &gmt) == NULL ||
+        localtime_r(&utc, &local) == NULL)
+    {
+        return false;
+    }
 
     // if both local and UTC timestamps fall on the same day, this is the UTC/DST offset
     offset = ((local.tm_hour - gmt.tm_hour) * 60
-              + (local.tm_min - gmt.tm_min)) * 60
-        + local.tm_sec - gmt.tm_sec;
+            + (local.tm_min - gmt.tm_min)) * 60
+             + local.tm_sec - gmt.tm_sec;
 
-    // if either local year or local day_in_year is less than its UTC counterpart,
-    // we're dealing with a negative UTC/DST offset which extends into the prior day
+    // if the local day is earlier than its UTC counterpart, we're dealing with
+    // a negative UTC/DST offset which extends into the prior day
     // we'll have to subtract a full day from 'offset' to compensate
-    if ((local.tm_year < gmt.tm_year) || (local.tm_yday < gmt.tm_yday))
+    if (local.tm_year < gmt.tm_year ||
+        local.tm_year == gmt.tm_year && local.tm_yday < gmt.tm_yday)
     {
-        offset -= one_day;
+        offset -= 24 * 3600;
     }
 
     // similar to above, if we're dealing with a positive UTC/DST offset extending
     // into the next day, we'll have to add a full day to 'offset' to compensate
-    if ((local.tm_year > gmt.tm_year) || (local.tm_yday > gmt.tm_yday))
+    if (local.tm_year > gmt.tm_year ||
+        local.tm_year == gmt.tm_year && local.tm_yday > gmt.tm_yday)
     {
-        offset += one_day;
+        offset += 24 * 3600;
     }
 
-    return offset;
+    // time_t shouldn't be cast to int64_t, but seems to be no way around
+    *loc = (int64_t)utc + offset + StatEpoch;
+    return true;
+}
+
+
+/**
+ * helper function to convert local time to UTC time.
+ *
+ * @param time   Local time in microseconds since 0001-01-01T00:00:00.
+ * @param utc    Calendar time (UTC) in seconds elapsed since 1970-01-01T00:00:00Z.
+ *
+ * @return true if local time can be converted to UTC, false otherwise.
+ */
+bool localToUtc(int64_t loc, time_t *utc)
+{
+    struct tm local;
+    time_t seconds;
+
+    // we shouldn't convert int64_t to time_t, but seems to be no way around
+    seconds = loc / 1000000 - StatEpoch;
+    // (mis-)use gmtime() to break our local time into its components
+    if (gmtime_r(&seconds, &local) == NULL)
+    {
+        return false;
+    }
+
+    local.tm_isdst = -1; // mktime determines whether DST is in effect
+    *utc = mktime(&local);
+    // If mktime() fails it returns (time_t)-1, but -1 might also be the
+    // valid date 1969-12-31T23:59:59Z.  But as we may have a timezone
+    // shift of +/- 12 (or even more) hours, we have no reliable way of
+    // distinguishing those cases.  So we'll accept -1 as valid if the
+    // date was either 1969-12-31 or 1970-01-01.
+    return *utc != (time_t)-1 ||
+      local.tm_year == 1969 - 1900 && local.tm_mon == 12 - 1 && local.tm_mday == 31 ||
+      local.tm_year == 1970 - 1900 && local.tm_mon == 1 - 1 && local.tm_mday == 1;
 }
 
 
@@ -962,12 +1010,12 @@ int get_utc_offset(time_t time)
 int64_t SysFileSystem::getLastModifiedDate(const char *name)
 {
     struct stat64 st;
+    int64_t temp;
 
-    if (stat64(name, &st))
+    if (stat64(name, &st) || !utcToLocal(st.st_mtime, &temp))
     {
         return NoTimeStamp;
     }
-    int64_t temp = (int64_t)st.st_mtime + get_utc_offset(st.st_mtime) + StatEpoch;
     temp *= 1000000;
 
     // add microseconds, if available
@@ -992,12 +1040,12 @@ int64_t SysFileSystem::getLastModifiedDate(const char *name)
 int64_t SysFileSystem::getLastAccessDate(const char *name)
 {
     struct stat64 st;
+    int64_t temp;
 
-    if (stat64(name, &st))
+    if (stat64(name, &st) || !utcToLocal(st.st_atime, &temp))
     {
         return NoTimeStamp;
     }
-    int64_t temp = (int64_t)st.st_atime + get_utc_offset(st.st_atime) + StatEpoch;
     temp *= 1000000;
 
     // add microseconds, if available
@@ -1073,14 +1121,16 @@ bool SysFileSystem::isHidden(const char *name)
 /**
  * Set the last modified date for a file.
  *
- * @param name   The target name.
- * @param time   The new file time (in ticks).
+ * @param name   The file or directory name.
+ * @param time   The new file time in local time given as
+ *               microseconds since 0001-01-01T00:00:00
  *
  * @return true if the filedate was set correctly, false otherwise.
  */
 bool SysFileSystem::setLastModifiedDate(const char *name, int64_t time)
 {
     struct stat64 st;
+    time_t utc;
     struct timeval times[2];
     if (stat64(name, &st) != 0)
     {
@@ -1097,8 +1147,12 @@ bool SysFileSystem::setLastModifiedDate(const char *name, int64_t time)
 
     times[0].tv_sec = st.st_atime;
     times[0].tv_usec = usec_a;
-    int64_t seconds = time / 1000000 - StatEpoch;
-    times[1].tv_sec = seconds - get_utc_offset(seconds);
+
+    if (!localToUtc(time, &utc))
+    {
+        return false;
+    }
+    times[1].tv_sec = utc;
     times[1].tv_usec = time % 1000000;
     return utimes(name, times) == 0;
 }
@@ -1115,6 +1169,7 @@ bool SysFileSystem::setLastModifiedDate(const char *name, int64_t time)
 bool SysFileSystem::setLastAccessDate(const char *name, int64_t time)
 {
     struct stat64 st;
+    time_t utc;
     struct timeval times[2];
     if (stat64(name, &st) != 0)
     {
@@ -1131,8 +1186,12 @@ bool SysFileSystem::setLastAccessDate(const char *name, int64_t time)
 
     times[1].tv_sec = st.st_mtime;
     times[1].tv_usec = usec_m;
-    int64_t seconds = time / 1000000 - StatEpoch;
-    times[0].tv_sec = seconds - get_utc_offset(seconds);
+
+    if (!localToUtc(time, &utc))
+    {
+        return false;
+    }
+    times[0].tv_sec = utc;
     times[0].tv_usec = time % 1000000;
     return utimes(name, times) == 0;
 }
@@ -1187,38 +1246,27 @@ bool SysFileSystem::setFileWritable(const char *name)
 /**
  * indicate whether the file system is case sensitive.
  *
- * @return For Unix systems, always returns true. For MacOS,
- *         this needs to be determined on a case-by-case basis.
- *         This returns the information for the root file system
+ * @return true if root (/) is case-sensitive.
  */
 bool SysFileSystem::isCaseSensitive()
 {
-#ifndef HAVE_PC_CASE_SENSITIVE
-    return true;
-#else
-    long res = pathconf("/", _PC_CASE_SENSITIVE);
-    if (res != -1)
-    {
-        return (res == 1);
-    }
-    // any error means this value is not supported for this file system
-    // so the result is most likely true (unix standard)
-    return true;
-#endif
+    return isCaseSensitive("/");
 }
 
 
 /**
  * test if an individual file is a case sensitive name
  *
- * @return For Unix systems, always returns true. For MacOS,
- *         this needs to be determined on a case-by-case basis.
+ * Most Unix file systems by default are case-sensitive (with the exception
+ * of e. g. Darwin).  But since Linux kernel 5.2 a per-directory
+ * case-insensitivity is supported on ext4 file systems.
+ * On Darwin, partitions may be configured to be case *sensitive*.
+ *
+ * @return true if the given file is located within a case-sensitive directory.
  */
 bool SysFileSystem::isCaseSensitive(const char *name)
 {
-#ifndef HAVE_PC_CASE_SENSITIVE
-    return true;
-#else
+#if defined HAVE_PC_CASE_SENSITIVE || defined HAVE_FS_CASEFOLD_FL
     AutoFree tmp = strdup(name);
 
     while (!SysFileSystem::exists(tmp))
@@ -1243,15 +1291,33 @@ bool SysFileSystem::isCaseSensitive(const char *name)
     }
 
     // at this point the tmp variable contains something that exists
+#endif
+
+#if defined HAVE_PC_CASE_SENSITIVE
+    // Darwin supports case *sensitive* partitions
     long res = pathconf(tmp, _PC_CASE_SENSITIVE);
     if (res != -1)
     {
         return (res == 1);
     }
+    // any error means this value is not supported for this file system
+    // so the result is most likely true (unix standard)
 
+#elif defined HAVE_FS_CASEFOLD_FL
+    // Linux kernel 5.2 now supports per-directory case-insensitivity on
+    // ext4 file systems
+    int attr = 0;
+    int fd = open(tmp, O_RDONLY | O_NONBLOCK);
+    if (fd >= 0)
+    {
+        ioctl(fd, FS_IOC_GETFLAGS, &attr);
+        close(fd);
+        return (attr & FS_CASEFOLD_FL) == 0;
+    }
     // non-determined, just return true
-    return true;
 #endif
+
+    return true;
 }
 
 

@@ -1,11 +1,11 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Copyright (c) 2008-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2008-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -304,6 +304,32 @@ RexxRoutine1(CSTRING,                   // Return type
             TestCstringArg,             // Function routine name
             CSTRING, arg1)             // Argument
 {
+    return arg1;
+}
+
+RexxRoutine1(CSTRING, TestOptionalCstringArg,
+             OPTIONAL_CSTRING, arg1)
+{
+    if (argumentOmitted(1))
+    {
+        return "OMITTED";
+    }
+    return arg1;
+}
+
+RexxRoutine1(RexxStringObject, TestStringArg,
+            RexxStringObject, arg1)
+{
+    return arg1;
+}
+
+RexxRoutine1(RexxStringObject, TestOptionalStringArg,
+             OPTIONAL_RexxStringObject, arg1)
+{
+    if (argumentOmitted(1))
+    {
+        return context->String("OMITTED");
+    }
     return arg1;
 }
 
@@ -744,6 +770,121 @@ RexxRoutine2(RexxObjectPtr,
     return NULLOBJECT;
 }
 
+RexxRoutine1(int,
+            TestRaiseException0,
+            size_t, errNo)
+{
+    context->RaiseException0(errNo);
+    // this should still get executed
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine2(int,
+            TestRaiseException1,
+            size_t, errNo,
+            RexxObjectPtr, sub1)
+{
+    context->RaiseException1(errNo, sub1);
+    // this should still get executed
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine3(int,
+            TestRaiseException2,
+            size_t, errNo,
+            RexxObjectPtr, sub1,
+            RexxObjectPtr, sub2)
+{
+    context->RaiseException2(errNo, sub1, sub2);
+    // this should still get executed
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine2(int,
+            TestRaiseException,
+            size_t, errNo,
+            RexxArrayObject, subs)
+{
+    context->RaiseException(errNo, subs);
+    // this should still get executed
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine1(int,
+            TestThrowException0,
+            size_t, errNo)
+{
+    context->ThrowException0(errNo);
+    // this should never execute
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine2(int,
+            TestThrowException1,
+            size_t, errNo,
+            RexxObjectPtr, sub1)
+{
+    context->ThrowException1(errNo, sub1);
+    // this should never execute
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine3(int,
+            TestThrowException2,
+            size_t, errNo,
+            RexxObjectPtr, sub1,
+            RexxObjectPtr, sub2)
+{
+    context->ThrowException2(errNo, sub1, sub2);
+    // this should never execute
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine2(int,
+            TestThrowException,
+            size_t, errNo,
+            RexxArrayObject, subs)
+{
+    context->ThrowException(errNo, subs);
+    // this should never execute
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+RexxRoutine4(int,
+            TestThrowCondition,
+            CSTRING, name,
+            OPTIONAL_CSTRING, desc,
+            OPTIONAL_RexxArrayObject, add,
+            OPTIONAL_RexxObjectPtr, result)
+{
+    context->ThrowCondition(name, (RexxStringObject)desc, add, result);
+    // this should never execute
+    context->SetContextVariable("CONTINUE", context->True());
+    return 0;
+}
+
+
+RexxRoutine1(RexxObjectPtr,
+             TestNestedAttach,
+             RexxObjectPtr, o)
+{
+    RexxInstance *instance = context->GetInterpreterInstance();
+
+    RexxThreadContext *attachedContext;
+    instance->AttachThread(&attachedContext);
+    RexxObjectPtr r = attachedContext->SendMessage0(o, "STRING");
+    attachedContext->DetachThread();
+    context->RaiseException0(Rexx_Error_Execution_no_concurrency);
+    return r;
+}
 
 
 RexxRoutineEntry orxtest_funcs[] = {
@@ -779,6 +920,9 @@ RexxRoutineEntry orxtest_funcs[] = {
     REXX_TYPED_ROUTINE(TestFloatArg,          TestFloatArg),
     REXX_TYPED_ROUTINE(TestDoubleArg,         TestDoubleArg),
     REXX_TYPED_ROUTINE(TestCstringArg,        TestCstringArg),
+    REXX_TYPED_ROUTINE(TestOptionalCstringArg, TestOptionalCstringArg),
+    REXX_TYPED_ROUTINE(TestStringArg,         TestStringArg),
+    REXX_TYPED_ROUTINE(TestOptionalStringArg, TestOptionalStringArg),
     REXX_TYPED_ROUTINE(TestPointerValue,      TestPointerValue),
     REXX_TYPED_ROUTINE(TestPointerArg,        TestPointerArg),
     REXX_TYPED_ROUTINE(TestNullPointerValue,  TestNullPointerValue),
@@ -803,6 +947,16 @@ RexxRoutineEntry orxtest_funcs[] = {
     REXX_TYPED_ROUTINE(TestResolveStemVariable, TestResolveStemVariable),
     REXX_TYPED_ROUTINE(TestFindContextClass,  TestFindContextClass),
     REXX_TYPED_ROUTINE(TestAddCommandEnvironment, TestAddCommandEnvironment),
+    REXX_TYPED_ROUTINE(TestRaiseException0,         TestRaiseException0),
+    REXX_TYPED_ROUTINE(TestRaiseException1,         TestRaiseException1),
+    REXX_TYPED_ROUTINE(TestRaiseException2,         TestRaiseException2),
+    REXX_TYPED_ROUTINE(TestRaiseException,          TestRaiseException),
+    REXX_TYPED_ROUTINE(TestThrowException0,         TestThrowException0),
+    REXX_TYPED_ROUTINE(TestThrowException1,         TestThrowException1),
+    REXX_TYPED_ROUTINE(TestThrowException2,         TestThrowException2),
+    REXX_TYPED_ROUTINE(TestThrowException,          TestThrowException),
+    REXX_TYPED_ROUTINE(TestThrowCondition,          TestThrowCondition),
+    REXX_TYPED_ROUTINE(TestNestedAttach,            TestNestedAttach),
     REXX_LAST_ROUTINE()
 };
 

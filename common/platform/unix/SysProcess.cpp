@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -49,19 +49,17 @@
 # include <pwd.h>
 #endif
 
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-
 #ifdef HAVE_DLFCN_H
 # include <dlfcn.h>
 #endif
 
+#include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include "SysProcess.hpp"
+#include "SysThread.hpp"
 #include "rexx.h"
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -73,6 +71,9 @@
 #ifdef HAVE_NSGETEXECUTABLEPATH
 # include <mach-o/dyld.h>
 #endif
+#if defined HAVE_KERN_PROC_PATHNAME || defined HAVE_KERN_PROC_ARGV
+# include <sys/sysctl.h>
+#endif
 
 
 // full path of the currently running executable
@@ -83,22 +84,15 @@ const char *SysProcess::libraryLocation = NULL;
 /**
  * Get the current user name information.
  *
- * @param buffer The buffer (of at least MAX_USERID_LENGTH characters) into which the userid is copied.
+ * @param buffer The buffer (of at least MAX_USERID_LENGTH characters) into
+ * which the userid is copied.
  */
 void SysProcess::getUserID(char *buffer)
 {
-#if defined( HAVE_GETPWUID )
-    struct passwd * pstUsrDat;
-#endif
+    struct passwd *pstUsrDat;
 
-#if defined( HAVE_GETPWUID )
     pstUsrDat = getpwuid(geteuid());
-    strncpy( buffer,  pstUsrDat->pw_name, MAX_USERID_LENGTH-1);
-#elif defined( HAVE_IDTOUSER )
-    strncpy( buffer, IDtouser(geteuid()), MAX_USERID_LENGTH-1);
-#else
-    strcpy( buffer, "unknown" );
-#endif
+    strncpy(buffer, pstUsrDat->pw_name, MAX_USERID_LENGTH-1);
 }
 
 
@@ -115,8 +109,13 @@ const char* SysProcess::getExecutableFullPath()
         return executableFullPath;
     }
 
-    char path[PATH_MAX];
+    char path[PATH_MAX] = ""; // we have no valid path yet
+    const char *path_p = path;
 
+    // run Darwin/Solaris/BSD-specific functions to retrieve the path
+    // in some cases they may fail to retrieve a valid path (e. g. on
+    // NetBSD where HAVE_KERN_PROC_PATHNAME is defined, sysctl succeeds,
+    // but returns len == 0)
 #ifdef HAVE_NSGETEXECUTABLEPATH
     // Darwin
     uint32_t length = sizeof(path);
@@ -125,35 +124,79 @@ const char* SysProcess::getExecutableFullPath()
         path[0] = '\0';
     }
 #elif defined HAVE_GETEXECNAME
-    // SunOS, Solaris et al.
-    if (getexecname(), path) == NULL)
+    // Solaris/OpenIndiana
+    path_p = getexecname();
+    if (path_p == NULL)
     {
+        path_p = path;
         path[0] = '\0';
     }
-#else
-    const char *procfs[4];
-    char proc_path[32];
-
-    procfs[0] = "/proc/self/exe";     // LINUX
-    procfs[1] = "/proc/curproc/exe";  // BSD
-    procfs[2] = "/proc/curproc/file"; // FreeBSD, DragonFly BSD
-    snprintf(proc_path, sizeof(proc_path), "/proc/%d/path/a.out", getpid());
-    procfs[3] = proc_path;            // Solaris, OpenIndiana
-
-    ssize_t bytes = 0;
-    for (int i = 0; i < sizeof(procfs) / sizeof(procfs[0]) && bytes == 0; i++)
+#elif defined HAVE_KERN_PROC_PATHNAME
+    // FreeBSD, DragonFly BSD
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
+    size_t len = PATH_MAX;
+    if (sysctl(mib, 4, path, &len, NULL, 0) == -1 || len == 0)
     {
-        bytes = readlink(procfs[i], path, sizeof(path));
-        if (bytes == -1 || bytes == sizeof(path))
+        // sysctl has failed or len was returned as zero, maybe this is
+        // NetBSD which uses different arguments
+        mib[1] = KERN_PROC_ARGS;
+        mib[2] = -1;
+        mib[3] = KERN_PROC_PATHNAME;
+        len = PATH_MAX;
+        if (sysctl(mib, 4, path, &len, NULL, 0) == -1 || len == 0)
         {
-            bytes = 0;
+            path[0] = '\0';
         }
     }
-    path[bytes] = '\0'; // we must always add a trailing NUL
+#elif defined HAVE_KERN_PROC_ARGV
+    // OpenBSD
+    // no means to retrieve the executable path, need to resort to argv[0]
+    int mib[4] = {CTL_KERN, KERN_PROC_ARGS, getpid(), KERN_PROC_ARGV};
+    size_t len;
+    char **argv;
+    path[0] = '\0';
+    if (sysctl(mib, 4, NULL, &len, NULL, 0) != -1 &&
+       (argv = (char **)malloc(len)) != NULL)
+    {
+        if (sysctl(mib, 4, argv, &len, NULL, 0) != -1 && len > 0)
+        {
+            // to be 100% reliable, only accept an absolute path
+            if (argv[0][0] == '/')
+            {
+                strcpy(path, argv[0]);
+            }
+        }
+        free(argv);
+    }
 #endif
 
+    // if we have no OS-specific functions defined, or they failed to
+    // retrieve a valid path, try procfs
+    if (path[0] == '\0')
+    {
+        const char *procfs[4];
+        char proc_path[32];
+
+        procfs[0] = "/proc/self/exe";     // Linux, NetBSD
+        procfs[1] = "/proc/curproc/exe";  // NetBSD
+        procfs[2] = "/proc/curproc/file"; // FreeBSD, DragonFly BSD
+        snprintf(proc_path, sizeof(proc_path), "/proc/%d/path/a.out", getpid());
+        procfs[3] = proc_path;            // Solaris/OpenIndiana
+
+        ssize_t bytes = 0;
+        for (int i = 0; i < sizeof(procfs) / sizeof(procfs[0]) && bytes == 0; i++)
+        {
+            bytes = readlink(procfs[i], path, sizeof(path));
+            if (bytes == -1 || bytes == sizeof(path))
+            {
+                bytes = 0;
+            }
+        }
+        path[bytes] = '\0'; // we must always add a trailing NUL
+    }
+
     // this is the file location with any symbolic links resolved.
-    char *modulePath = realpath(path, NULL);
+    char *modulePath = realpath(path_p, NULL);
     if (modulePath == NULL)
     {
         return NULL;
@@ -223,7 +266,7 @@ const char* SysProcess::getLibraryLocation()
 
 
 /**
- * do a beep tone
+ * Sound the speaker.
  *
  * @param frequency The frequency to beep at
  * @param duration  The duration to beep (in milliseconds)
@@ -233,34 +276,54 @@ const char* SysProcess::getLibraryLocation()
 bool SysProcess::playSpeaker(int frequency, int duration)
 {
 #ifdef HAVE_KDMKTONE
-    int fd = 1;   // The ioctl file descriptor
 
-    // do a test with this using zero to see if this will work
-    if (ioctl(fd, KDMKTONE, 0) != 0)
+    const char *console[] =
     {
-        // if this failed, try to open the console
-        fd	= open("/dev/tty", O_WRONLY);
-        // if this fails, then we can't play this
-        if (fd < 0)
+        "/dev/tty0",
+        "/dev/tty1",
+        "/dev/tty",
+        "/dev/console",
+        "/dev/vc/0"
+    };
+
+    int fd;
+    int io = -1;
+
+    // We need a file descriptor to run ioctl on the console, which will
+    // typically require root access rights.  Try a few devices and see
+    // if we can successfully open one of them.
+    for (int i = 0; i < sizeof(console) / sizeof(console[0]) && io < 0; i++)
+    {
+        // according to the docs open() may have unwanted side effects
+        // that can be avoided under Linux with the O_NONBLOCK flag
+        fd = open(console[i], O_RDWR | O_NONBLOCK);
+        if (fd >= 0)
         {
-            // try the virtual console as a fallback
-            fd = open("/dev/vc/0", O_WRONLY);
-            if (fd < 0)
+            // test KDMKTONE with zero just to see whether this will work
+            io = ioctl(fd, KDMKTONE, 0);
+            if (io >=0)
             {
-                return false;
+                // 1193180 is the magic number of clock cycles that the docs
+                // tell you to use to get a frequency in clock cycles
+                int pitch = 1193180 / frequency;
+                ioctl(fd, KDMKTONE, (duration << 16) | pitch);
+
+                // the sound is on, now wait for duration milliseconds
+                // MAX_DURATION is 60000, so there can be no overflow
+                SysThread::longSleep(duration * 1000);
+
+                // turn sound off again
+                ioctl(fd, KDMKTONE, 0);
+
+                close(fd);
+                return true;
             }
+            close(fd);
         }
     }
-
-    // 1193180 is the magic number of clock cycles that the docs
-    // tell you to use to get a frequency in clock cycles
-    int pitch = 1193180 / frequency;
-    int rc = ioctl(fd, KDMKTONE, (duration << 16) | pitch);
-    return rc >=0;
-#else
+#endif
     // not available, need to use the low tech version
     return false;
-#endif
 }
 
 

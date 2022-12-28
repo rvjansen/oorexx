@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -51,6 +51,7 @@
 #include "PackageClass.hpp"
 #include "WeakReferenceClass.hpp"
 #include "RoutineClass.hpp"
+#include "NativeActivation.hpp"
 
 
 /**
@@ -312,7 +313,7 @@ bool InterpreterInstance::detachThread()
  *
  * @return The attached activity.
  */
-Activity *InterpreterInstance::spawnActivity(Activity *parent)
+Activity* InterpreterInstance::spawnActivity(Activity *parent)
 {
     // create a new activity
     Activity *activity = ActivityManager::createNewActivity(parent);
@@ -369,7 +370,7 @@ bool InterpreterInstance::poolActivity(Activity *activity)
  * @return The associated activity, or OREF_NULL if the current thread
  *         is not attached.
  */
-Activity *InterpreterInstance::findActivity(thread_id_t threadId)
+Activity* InterpreterInstance::findActivity(thread_id_t threadId)
 {
     // this is a critical section
     ResourceSection lock;
@@ -395,7 +396,7 @@ Activity *InterpreterInstance::findActivity(thread_id_t threadId)
  *
  * @return The target activity.
  */
-Activity *InterpreterInstance::findActivity()
+Activity* InterpreterInstance::findActivity()
 {
     return findActivity(SysActivity::queryThreadID());
 }
@@ -408,7 +409,7 @@ Activity *InterpreterInstance::findActivity()
  * @return The activity object associated with this thread/instance
  *         combination.
  */
-Activity *InterpreterInstance::enterOnCurrentThread()
+Activity* InterpreterInstance::enterOnCurrentThread()
 {
     // attach this thread to the current activity
     Activity *activity = attachThread();
@@ -419,19 +420,6 @@ Activity *InterpreterInstance::enterOnCurrentThread()
     activity->requestApiAccess();
     // return the activity for use
     return activity;
-}
-
-
-/**
- * We're leaving the current thread.  So we need to deactivate
- * this.
- */
-void InterpreterInstance::exitCurrentThread()
-{
-    // find the current activity and deactivate it, and
-    // release the kernel lock.
-    Activity *activity = findActivity();
-    activity->exitCurrentThread();
 }
 
 
@@ -447,7 +435,8 @@ void InterpreterInstance::removeInactiveActivities()
     for (size_t i = 0; i < count; i++)
     {
         Activity *activity = (Activity *)allActivities->pull();
-        if (activity->isActive())
+        // we never terminate the root activity or any activity current in use
+        if (activity == rootActivity || activity->isActive())
         {
             allActivities->append(activity);
         }
@@ -468,30 +457,39 @@ void InterpreterInstance::removeInactiveActivities()
  */
 bool InterpreterInstance::terminate()
 {
-    // if our current activity is not the root one, we can't do that
-    Activity *current = findActivity();
-    // we also can't be doing active work on the root thread
-    if (current != rootActivity || rootActivity->isActive())
+    // check this is in fact a valid instance
+    if (!Interpreter::isInstanceActive(this))
     {
         return false;
     }
 
-    terminated = false;
-    // turn on the global termination in process flag
-    terminating = true;
+
+    // we can't be doing active work on the root thread
+    if (rootActivity->isActive())
+    {
+        return false;
+    }
 
     {
 
         ResourceSection lock;
-        // remove the current activity from the list so we don't clean everything
-        // up.  We need to
-        allActivities->removeItem(current);
+
+        // it's possible to get a call on a second thread or even recursively, let's make sure
+        // we're not already in the process of shutting down
+
+        if (terminating)
+        {
+            return false;
+        }
+
+        terminated = false;
+        // turn on the global termination in process flag
+        terminating = true;
+
         // go remove all of the activities that are not doing work for this instance
         removeInactiveActivities();
-        // no activities left?  We can leave now
-        terminated = allActivities->isEmpty();
-        // we need to restore the rootActivity to the list for potentially running uninits
-        allActivities->append(current);
+        // if we just have the single root activity left, then we can shutdown
+        terminated = allActivities->items() == 1;
     }
 
     // if there are active threads still running, we need to wait until
@@ -501,24 +499,56 @@ bool InterpreterInstance::terminate()
         terminationSem.wait();
     }
 
-    // if everything has terminated, then make sure we run the uninits before shutting down.
-    // This activity is currently the current activity.  We're going to run the
-    // uninits on this one, so reactivate it until we're done running
-    enterOnCurrentThread();
-    // before we update of the data structures, make sure we process any
-    // pending uninit activity.
-    memoryObject.collectAndUninit(Interpreter::lastInstance());
+    Activity *current;
 
-    // do system specific termination of an instance
-    sysInstance.terminate();
+    try
+    {
+        // if everything has terminated, then make sure we run the uninits before shutting down.
+        // This activity is currently the current activity.  We're going to run the
+        // uninits on this one, so reactivate it until we're done running. If we were not actually
+        // called on an attached thread, an attach will be performed.
+        current = enterOnCurrentThread();
 
-    // ok, deactivate this again...this will return the activity because the terminating
-    // flag is on.
-    exitCurrentThread();
+        // this might be holding some local references. Make sure we clear these
+        // before running the garbage collector
+        rootActivity->clearLocalReferences();
+
+        // before we update of the data structures, make sure we process any
+        // pending uninit activity.
+        memoryObject.collectAndUninit(Interpreter::lastInstance());
+
+        // do system specific termination of an instance
+        sysInstance.terminate();
+
+        // ok, deactivate this again...this will return the activity because the terminating
+        // flag is on.
+        current->exitCurrentThread();
+    }
+    // do the release in a catch block to ensure we really release this
+    catch (NativeActivation *)
+    {
+        // ok, deactivate this again...this will return the activity because the terminating
+        // flag is on.
+        current->exitCurrentThread();
+
+    }
+
     terminationSem.close();
 
     // make sure the root activity is removed by the ActivityManager;
-    ActivityManager::returnRootActivity(current);
+    ActivityManager::returnRootActivity(rootActivity);
+
+    // just in case there's still a reference held to this, clear out all object reference fields
+    rootActivity = OREF_NULL;
+    securityManager = OREF_NULL;
+    allActivities = OREF_NULL;
+    defaultEnvironment = OREF_NULL;
+    searchPath = OREF_NULL;
+    searchExtensions = OREF_NULL;
+    localEnvironment = OREF_NULL;
+    commandHandlers = OREF_NULL;
+    requiresFiles = OREF_NULL;
+
 
     // tell the main interpreter controller we're gone.
     Interpreter::terminateInterpreterInstance(this);
@@ -893,11 +923,12 @@ void InterpreterInstance::addRequiresFile(RexxString *shortName, RexxString *ful
  */
 PackageClass *InterpreterInstance::loadRequires(Activity *activity, RexxString *shortName, RexxString *fullName)
 {
-
     // if we've already loaded this in this instance, just return it.
     Protected<PackageClass> package = getRequiresFile(activity, shortName);
     if (!package.isNull())
     {
+        // check for recursion here. We only need to do this if it's already in the cache
+        activity->checkRequires(package->getProgramName());
         return package;
     }
 
@@ -908,6 +939,8 @@ PackageClass *InterpreterInstance::loadRequires(Activity *activity, RexxString *
         package = getRequiresFile(activity, fullName);
         if (!package.isNull())
         {
+            // check for recursion here. We only need to do this if it's already in the cache
+            activity->checkRequires(package->getProgramName());
             // add this to the cache using the short name, since they resolve to the same
             addRequiresFile(shortName, OREF_NULL, package);
             return package;
@@ -1028,11 +1061,13 @@ PackageClass *InterpreterInstance::loadRequires(Activity *activity, RexxString *
  *                   The extension our calling program has.  If there is an extension,
  *                   we'll use that version first before trying any of the default
  *                   extensions.
+ * @param type       Either RESOLVE_REQUIRES, which requests an additional extension
+ *                   to be tried before the standard search order, or RESOLVE_DEFAULT.
  *
  * @return A string version of the file name, if found.  Returns OREF_NULL if
  *         the program cannot be found.
  */
-RexxString* InterpreterInstance::resolveProgramName(RexxString *_name, RexxString *_parentDir, RexxString *_parentExtension)
+RexxString* InterpreterInstance::resolveProgramName(RexxString *_name, RexxString *_parentDir, RexxString *_parentExtension, ResolveType type)
 {
     FileNameBuffer resolvedName;
 
@@ -1054,6 +1089,15 @@ RexxString* InterpreterInstance::resolveProgramName(RexxString *_name, RexxStrin
         return OREF_NULL;
     }
 
+    // if we are resolving a REQUIRES file, we first try extension .cls
+    if (type == RESOLVE_REQUIRES)
+    {
+        if (SysFileSystem::searchName(name, searchPath.path, ".cls", resolvedName))
+        {
+            return new_string(resolvedName);
+        }
+    }
+
     // if we have a parent extension provided, use that in preference to any default searches
     if (parentExtension != NULL)
     {
@@ -1061,7 +1105,6 @@ RexxString* InterpreterInstance::resolveProgramName(RexxString *_name, RexxStrin
         {
             return new_string(resolvedName);
         }
-
     }
 
     // ok, now time to try each of the individual extensions along the way.

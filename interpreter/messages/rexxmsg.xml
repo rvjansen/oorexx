@@ -96,21 +96,12 @@ optional for the subcodes.
       </SubMessage>
       <SubMessage>
         <Code>3</Code>
-        <Subcode>904</Subcode>
-        <MessageNumber>560</MessageNumber>
+        <Subcode>905</Subcode>
+        <MessageNumber>477</MessageNumber>
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Program_unreadable_invalid_encoding</SymbolicName>
         <Text>Encoded compiled program <q><Sub position="1" name="program_name"/></q> cannot be decoded.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>3</Code>
-        <Subcode>904</Subcode>
-        <MessageNumber>602</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Program_not_tokenized</SymbolicName>
-        <Text>Failure during initialization: Program <q><Sub position="1" name="program"/></q> needs to be tokenized. To run untokenized scripts you need a full version of Object REXX.</Text>
       </SubMessage>
     </Subcodes>
   </Message>
@@ -293,12 +284,12 @@ construction. For example:</para>
 <programlisting>
 WRONG                     RIGHT
 
-If a=c then do;           If a=c then do;
-Say EQUALS                Say EQUALS
-exit                      exit
-else                        end
-Say NOT EQUALS            else
-Say NOT EQUALS
+if a = b then do          if a = b then do
+  say "equals"              say "equals"
+  exit                      exit
+else                      end
+  say "not equals"        else
+                            say "not equals"
 </programlisting>
     </Explanation>
     <UserAction><para>Look for a missing END or DO...END in the THEN part of a complex IF...THEN...ELSE construction.</para></UserAction>
@@ -393,6 +384,15 @@ Say NOT EQUALS
       </SubMessage>
       <SubMessage>
         <Code>10</Code>
+        <Subcode>004</Subcode>
+        <MessageNumber>217</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Unexpected_end_select</SymbolicName>
+        <Text>Symbol following END (<q><Sub position="1" name="symbol"/></q>) must match LABEL of SELECT specification (<q><Sub position="2" name="control_variable"/></q>) on line <Sub position="3" name="line_number"/> or be omitted.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>10</Code>
         <Subcode>005</Subcode>
         <MessageNumber>215</MessageNumber>
         <Component>Rexx</Component>
@@ -408,15 +408,6 @@ Say NOT EQUALS
         <Severity>Warning</Severity>
         <SymbolicName>Error_Unexpected_end_else</SymbolicName>
         <Text>END must not immediately follow ELSE.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>10</Code>
-        <Subcode>004</Subcode>
-        <MessageNumber>217</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Unexpected_end_select</SymbolicName>
-        <Text>Symbol following END (<q><Sub position="1" name="symbol"/></q>) must match LABEL of SELECT specification (<q><Sub position="2" name="control_variable"/></q>) on line <Sub position="3" name="line_number"/> or be omitted.</Text>
       </SubMessage>
       <SubMessage>
         <Code>10</Code>
@@ -632,7 +623,7 @@ Say NOT EQUALS
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Invalid_hex_invhex_group</SymbolicName>
-        <Text>Hexidecimal strings must be grouped in units that are multiples of two characters.</Text>
+        <Text>Hexadecimal strings must be grouped in units that are multiples of two characters.</Text>
       </SubMessage>
       <SubMessage>
         <Code>15</Code>
@@ -1497,21 +1488,21 @@ special character (such as a parenthesis).
       </SubMessage>
       <SubMessage>
         <Code>22</Code>
-        <Subcode>901</Subcode>
-        <MessageNumber>279</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Invalid_character_string_DBCS</SymbolicName>
-        <Text>Incorrect double-byte character.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>22</Code>
         <Subcode>900</Subcode>
         <MessageNumber>622</MessageNumber>
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Invalid_character_string_user_defined</SymbolicName>
         <Text><Sub position="1" name="message"/>.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>22</Code>
+        <Subcode>901</Subcode>
+        <MessageNumber>279</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Invalid_character_string_DBCS</SymbolicName>
+        <Text>Incorrect double-byte character.</Text>
       </SubMessage>
     </Subcodes>
   </Message>
@@ -1718,24 +1709,6 @@ special character (such as a parenthesis).
       </SubMessage>
       <SubMessage>
         <Code>25</Code>
-        <Subcode>914</Subcode>
-        <MessageNumber>294</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Invalid_subkeyword_callonname</SymbolicName>
-        <Text>CALL ON condition must be followed by the keyword NAME; found <q><Sub position="1" name="word"/></q>.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>25</Code>
-        <Subcode>915</Subcode>
-        <MessageNumber>295</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Invalid_subkeyword_signalonname</SymbolicName>
-        <Text>SIGNAL ON condition must be followed by the keyword NAME; found <q><Sub position="1" name="word"/></q>.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>25</Code>
         <Subcode>906</Subcode>
         <MessageNumber>298</MessageNumber>
         <Component>Rexx</Component>
@@ -1796,6 +1769,24 @@ special character (such as a parenthesis).
         <Severity>Warning</Severity>
         <SymbolicName>Error_Invalid_subkeyword_guard</SymbolicName>
         <Text>GUARD must be followed by the keyword ON or OFF; found <q><Sub position="1" name="word"/></q>.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>25</Code>
+        <Subcode>914</Subcode>
+        <MessageNumber>294</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Invalid_subkeyword_callonname</SymbolicName>
+        <Text>CALL ON condition must be followed by the keyword NAME; found <q><Sub position="1" name="word"/></q>.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>25</Code>
+        <Subcode>915</Subcode>
+        <MessageNumber>295</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Invalid_subkeyword_signalonname</SymbolicName>
+        <Text>SIGNAL ON condition must be followed by the keyword NAME; found <q><Sub position="1" name="word"/></q>.</Text>
       </SubMessage>
       <SubMessage>
         <Code>25</Code>
@@ -2064,21 +2055,21 @@ special character (such as a parenthesis).
       </SubMessage>
       <SubMessage>
         <Code>26</Code>
-        <Subcode>901</Subcode>
-        <MessageNumber>650</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Invalid_whole_number_method</SymbolicName>
-        <Text>Result of a method call did not result in a whole number; found <q><Sub position="1" name="value"/></q>.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>26</Code>
         <Subcode>900</Subcode>
         <MessageNumber>625</MessageNumber>
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Invalid_whole_number_user_defined</SymbolicName>
         <Text><Sub position="1" name="message"/>.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>26</Code>
+        <Subcode>901</Subcode>
+        <MessageNumber>650</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Invalid_whole_number_method</SymbolicName>
+        <Text>Result of a method call did not result in a whole number; found <q><Sub position="1" name="value"/></q>.</Text>
       </SubMessage>
       <SubMessage>
         <Code>26</Code>
@@ -2171,7 +2162,7 @@ special character (such as a parenthesis).
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Invalid_do_simple_do_counter</SymbolicName>
-        <Text>COUNTER keyword not allowd on a simple DO instruction.</Text>
+        <Text>COUNTER keyword not allowed on a simple DO instruction.</Text>
       </SubMessage>
     </Subcodes>
   </Message>
@@ -2260,8 +2251,8 @@ special character (such as a parenthesis).
     <Component>Rexx</Component>
     <Severity>Warning</Severity>
     <SymbolicName>Error_Name_too_long</SymbolicName>
-    <Text>Name or string too long.</Text>
-    <Explanation><para>A variable name, label name, literal (quoted) string has exceeded the allowed limit of 250 characters. The limit for names includes any substitutions. A possible cause of this error is if you use a period (.) in a name, causing an unexpected substitution. Leaving off an ending quotation mark for a literal string, or putting a single quotation mark in a string, can cause this error because several clauses can be included in the string. For example, write the string 'don't' as 'don't' or "don't".</para></Explanation>
+    <Text>Name or symbol too long.</Text>
+    <Explanation><para>A variable name, label name, or symbol has exceeded the allowed limit of 250 characters.</para></Explanation>
     <Subcodes>
       <SubMessage>
         <Code>30</Code>
@@ -2270,16 +2261,7 @@ special character (such as a parenthesis).
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Name_too_long_name</SymbolicName>
-        <Text>Name exceeds 250 characters:  <q><Sub position="1" name="name"/></q>.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>30</Code>
-        <Subcode>002</Subcode>
-        <MessageNumber>321</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Name_too_long_string</SymbolicName>
-        <Text>Literal string exceeds 250 characters:  <q><Sub position="1" name="string"/></q>.</Text>
+        <Text>Name or symbol exceeds 250 characters:  <q><Sub position="1" name="name"/></q>.</Text>
       </SubMessage>
       <SubMessage>
         <Code>30</Code>
@@ -2289,24 +2271,6 @@ special character (such as a parenthesis).
         <Severity>Warning</Severity>
         <SymbolicName>Error_Name_too_long_user_defined</SymbolicName>
         <Text><Sub position="1" name="message"/>.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>30</Code>
-        <Subcode>901</Subcode>
-        <MessageNumber>322</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Name_too_long_hex</SymbolicName>
-        <Text>Hexadecimal literal string exceeds 250 characters <q><Sub position="1" name="string"/></q>.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>30</Code>
-        <Subcode>902</Subcode>
-        <MessageNumber>323</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Name_too_long_bin</SymbolicName>
-        <Text>Binary literal string exceeds 250 characters <q><Sub position="1" name="string"/></q>.</Text>
       </SubMessage>
     </Subcodes>
   </Message>
@@ -2496,7 +2460,7 @@ special character (such as a parenthesis).
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Logical_value_logical_list</SymbolicName>
-        <Text>Value of logical list expression element must be exactly <q>0</q> or <q>1</q>; found <q><Sub position="2" name="value"/></q>.</Text>
+        <Text>Value of logical list expression element must be exactly <q>0</q> or <q>1</q>; found <q><Sub position="1" name="value"/></q>.</Text>
       </SubMessage>
       <SubMessage>
         <Code>34</Code>
@@ -2895,7 +2859,7 @@ special character (such as a parenthesis).
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Invalid_expression_missing_general</SymbolicName>
-        <Text>Missing expression following <Sub position="1" name="keyword"/> keyword of a <Sub position="1" name="instruction"/> instruction.</Text>
+        <Text>Missing expression following <Sub position="1" name="keyword"/> keyword of a <Sub position="2" name="instruction"/> instruction.</Text>
       </SubMessage>
       <SubMessage>
         <Code>35</Code>
@@ -3473,6 +3437,15 @@ special character (such as a parenthesis).
         <SymbolicName>Error_Incorrect_call_stem_sparse_array</SymbolicName>
         <Text>Stem element at position <q><Sub position="1" name="position"/></q> is not set.</Text>
       </SubMessage>
+      <SubMessage>
+        <Code>40</Code>
+        <Subcode>925</Subcode>
+        <MessageNumber>652</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Incorrect_call_noarray_nostem</SymbolicName>
+        <Text>Argument <Sub position="1" name="argument"/> must be an array object, a stem object, or a stem name value; found <q><Sub position="2" name="value"/></q>.</Text>
+      </SubMessage>
     </Subcodes>
   </Message>
   <Message>
@@ -3664,21 +3637,21 @@ special character (such as a parenthesis).
       </SubMessage>
       <SubMessage>
         <Code>43</Code>
-        <Subcode>901</Subcode>
-        <MessageNumber>418</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Routine_not_found_requires</SymbolicName>
-        <Text>Could not find file <q><Sub position="1" name="file"/></q> for ::REQUIRES.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>43</Code>
         <Subcode>900</Subcode>
         <MessageNumber>637</MessageNumber>
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Routine_not_found_user_defined</SymbolicName>
         <Text><Sub position="1" name="message"/>.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>43</Code>
+        <Subcode>901</Subcode>
+        <MessageNumber>418</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Routine_not_found_requires</SymbolicName>
+        <Text>Could not find file <q><Sub position="1" name="file"/></q> for ::REQUIRES.</Text>
       </SubMessage>
       <SubMessage>
         <Code>43</Code>
@@ -4206,7 +4179,7 @@ special character (such as a parenthesis).
   <Message>
     <Code>89</Code>
     <Subcode>000</Subcode>
-    <MessageNumber>652</MessageNumber>
+    <MessageNumber>89</MessageNumber>
     <Component>Rexx</Component>
     <Severity>Warning</Severity>
     <SymbolicName>Error_Variable_expected</SymbolicName>
@@ -4241,7 +4214,7 @@ special character (such as a parenthesis).
     <Severity>Warning</Severity>
     <SymbolicName>Error_External_name_not_found</SymbolicName>
     <Text>External name not found.</Text>
-    <Explanation><para>An external class, method, or routine (specified with the EXTERNAL option on a ::CLASS, ::METHOD, or ::ROUTINE directive, or as a second argument on a NEW message to the Method class) cannot be found.</para></Explanation>
+    <Explanation><para>An external method or routine (specified with the EXTERNAL option on an ::ATTRIBUTE, a ::METHOD, or a ::ROUTINE directive) cannot be found.</para></Explanation>
     <Subcodes>
       <SubMessage>
         <Code>90</Code>
@@ -4314,7 +4287,7 @@ special character (such as a parenthesis).
   <Message>
     <Code>92</Code>
     <Subcode>000</Subcode>
-    <MessageNumber>589</MessageNumber>
+    <MessageNumber>92</MessageNumber>
     <Component>OLE</Component>
     <Severity>Error</Severity>
     <SymbolicName>Error_OLE_Error</SymbolicName>
@@ -4586,15 +4559,6 @@ special character (such as a parenthesis).
         <Severity>Warning</Severity>
         <SymbolicName>Error_Incorrect_method_option</SymbolicName>
         <Text>Method option must be one of <q><Sub position="1" name="arguments"/></q>; found <q><Sub position="2" name="value"/></q>.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>93</Code>
-        <Subcode>916</Subcode>
-        <MessageNumber>445</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Incorrect_method_string</SymbolicName>
-        <Text>Method argument <Sub position="1" name="argument"/> must have a string value.</Text>
       </SubMessage>
       <SubMessage>
         <Code>93</Code>
@@ -5089,7 +5053,7 @@ special character (such as a parenthesis).
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Incorrect_method_invhex_group</SymbolicName>
-        <Text>Hexidecimal strings must be grouped in units that are multiples of two characters.</Text>
+        <Text>Hexadecimal strings must be grouped in units that are multiples of two characters.</Text>
       </SubMessage>
       <SubMessage>
         <Code>93</Code>
@@ -5522,6 +5486,65 @@ special character (such as a parenthesis).
       </SubMessage>
       <SubMessage>
         <Code>98</Code>
+        <Subcode>952</Subcode>
+        <MessageNumber>838</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Execution_circular_requires</SymbolicName>
+        <Text>Circular ::REQUIRES references detected with <Sub position="1" name="name"/>.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>98</Code>
+        <Subcode>970</Subcode>
+        <MessageNumber>495</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Error</Severity>
+        <SymbolicName>Error_Execution_error_syntax</SymbolicName>
+        <Text>External command <q><Sub position="1" name="command"/></q> ended with return code <Sub position="2" name="rc"/>.</Text>
+        <Explanation><para>An ERROR condition was raised and the package has ::OPTIONS ERROR SYNTAX specified.</para></Explanation>
+      </SubMessage>
+      <SubMessage>
+        <Code>98</Code>
+        <Subcode>971</Subcode>
+        <MessageNumber>496</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Error</Severity>
+        <SymbolicName>Error_Execution_failure_syntax</SymbolicName>
+        <Text>External command <q><Sub position="1" name="command"/></q> failed with return code <Sub position="2" name="rc"/>.</Text>
+        <Explanation><para>A FAILURE condition was raised and the package has ::OPTIONS FAILURE SYNTAX specified.</para></Explanation>
+      </SubMessage>
+      <SubMessage>
+        <Code>98</Code>
+        <Subcode>972</Subcode>
+        <MessageNumber>497</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Error</Severity>
+        <SymbolicName>Error_Execution_lostdigits_syntax</SymbolicName>
+        <Text>Number <Sub position="1" name="number"/> has more digits than the current precision.</Text>
+        <Explanation><para>A LOSTDIGITS condition was raised and the package has ::OPTIONS LOSTDIGITS SYNTAX specified.</para></Explanation>
+      </SubMessage>
+      <SubMessage>
+        <Code>98</Code>
+        <Subcode>973</Subcode>
+        <MessageNumber>498</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Error</Severity>
+        <SymbolicName>Error_Execution_nostring_syntax</SymbolicName>
+        <Text>Object <q><Sub position="1" name="object"/></q> does not have a string representation.</Text>
+        <Explanation><para>A NOSTRING condition was raised and the package has ::OPTIONS NOSTRING SYNTAX specified.</para></Explanation>
+      </SubMessage>
+      <SubMessage>
+        <Code>98</Code>
+        <Subcode>974</Subcode>
+        <MessageNumber>499</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Error</Severity>
+        <SymbolicName>Error_Execution_notready_syntax</SymbolicName>
+        <Text>Stream <q><Sub position="1" name="object"/></q> is not ready.</Text>
+        <Explanation><para>A NOTREADY condition was raised and the package has ::OPTIONS NOTREADY SYNTAX specified.</para></Explanation>
+      </SubMessage>
+      <SubMessage>
+        <Code>98</Code>
         <Subcode>975</Subcode>
         <MessageNumber>668</MessageNumber>
         <Component>Rexx</Component>
@@ -5545,7 +5568,7 @@ special character (such as a parenthesis).
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Execution_library_method</SymbolicName>
-        <Text>Unable to load method <q><Sub position="1" name="name"/></q> from library <q><Sub position="1" name="library"/></q>.</Text>
+        <Text>Unable to load method <q><Sub position="1" name="name"/></q> from library <q><Sub position="2" name="library"/></q>.</Text>
       </SubMessage>
       <SubMessage>
         <Code>98</Code>
@@ -5908,7 +5931,7 @@ special character (such as a parenthesis).
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Translation_bad_external</SymbolicName>
-        <Text>Incorrect external directive name <q><Sub position="1" name="method"/></q>.</Text>
+        <Text>Incorrect external name specification <q><Sub position="1" name="name"/></q>.</Text>
       </SubMessage>
       <SubMessage>
         <Code>99</Code>
@@ -5948,21 +5971,21 @@ special character (such as a parenthesis).
       </SubMessage>
       <SubMessage>
         <Code>99</Code>
-        <Subcode>924</Subcode>
-        <MessageNumber>561</MessageNumber>
-        <Component>Rexx</Component>
-        <Severity>Warning</Severity>
-        <SymbolicName>Error_Translation_reply_interpret</SymbolicName>
-        <Text>INTERPRET data must not contain REPLY.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>99</Code>
         <Subcode>923</Subcode>
         <MessageNumber>562</MessageNumber>
         <Component>Rexx</Component>
         <Severity>Warning</Severity>
         <SymbolicName>Error_Translation_forward_interpret</SymbolicName>
         <Text>INTERPRET data must not contain FORWARD.</Text>
+      </SubMessage>
+      <SubMessage>
+        <Code>99</Code>
+        <Subcode>924</Subcode>
+        <MessageNumber>561</MessageNumber>
+        <Component>Rexx</Component>
+        <Severity>Warning</Severity>
+        <SymbolicName>Error_Translation_reply_interpret</SymbolicName>
+        <Text>INTERPRET data must not contain REPLY.</Text>
       </SubMessage>
       <SubMessage>
         <Code>99</Code>
@@ -6455,10 +6478,10 @@ special character (such as a parenthesis).
     <Text>The RXSUBCOM parameters are incorrect.</Text>
     <Explanation><para>RXSUBCOM accepts the following parameters:
     <itemizedlist>
-    <listitem><para>To register a subcommand handler: RXSUBCOM REGISTER Environment_Name Dll_Name Procedure_Name</para></listitem>
-    <listitem><para>To query the existence of a specific subcommand handler: RXSUBCOM QUERY [Environment_Name [Dll_Name]]</para></listitem>
-    <listitem><para>To drop a subcommand handler: RXSUBCOM DROP Environment_Name [Dll_Name]</para></listitem>
-    <listitem><para>To load a subcommand handler from disk: RXSUBCOM LOAD Environment_Name [Dll_Name]</para></listitem>
+    <listitem><para>To register a subcommand handler: RXSUBCOM REGISTER envname dllname procname</para></listitem>
+    <listitem><para>To query the existence of a specific subcommand handler: RXSUBCOM QUERY envname [dllname]</para></listitem>
+    <listitem><para>To drop a subcommand handler: RXSUBCOM DROP envname [dllname]</para></listitem>
+    <listitem><para>To load a subcommand handler from disk: RXSUBCOM LOAD envname [dllname]</para></listitem>
     </itemizedlist>
     </para></Explanation>
     <UserAction><para>Check the RXSUBCOM parameters and retry the command.</para></UserAction>
@@ -6470,14 +6493,14 @@ special character (such as a parenthesis).
         <Component>RXSUBCOM</Component>
         <Severity>Error</Severity>
         <SymbolicName>Error_RXSUBC_register</SymbolicName>
-        <Text>The RXSUBCOM parameter REGISTER is incorrect.</Text>
+        <Text>The RXSUBCOM REGISTER parameters are incorrect.</Text>
         <Explanation>
         <para>RXSUBCOM REGISTER requires the following parameters:
             <variablelist>
-                <title>RXSUBCOM REGISTER Environment_Name Dll_Name Procedure_Name</title>
+                <title>RXSUBCOM REGISTER envname dllname procname</title>
                 <varlistentry>
                     <term>
-                        Environment_Name
+                        envname
                     </term>
                     <listitem>
                         <para>
@@ -6487,7 +6510,7 @@ special character (such as a parenthesis).
                 </varlistentry>
                 <varlistentry>
                     <term>
-            .           Dll_Name
+            .           dllname
                     </term>
                     <listitem>
                         <para>
@@ -6497,7 +6520,7 @@ special character (such as a parenthesis).
                 </varlistentry>
                 <varlistentry>
                     <term>
-            .           Procedure_Name
+            .           procname
                     </term>
                     <listitem>
                         <para>
@@ -6517,14 +6540,14 @@ special character (such as a parenthesis).
         <Component>RXSUBCOM</Component>
         <Severity>Error</Severity>
         <SymbolicName>Error_RXSUBC_drop</SymbolicName>
-        <Text>The RXSUBCOM parameter DROP is incorrect.</Text>
+        <Text>The RXSUBCOM DROP parameters are incorrect.</Text>
         <Explanation>
-        <para>RXSUBCOM DROP requires that the subcommand handler name be specified.
+        <para>RXSUBCOM DROP requires the environment name be specified.
            <variablelist>
-               <title>RXSUBCOM DROP Environment_Name [Dll_Name]</title>
+               <title>RXSUBCOM DROP envname [dllname]</title>
                <varlistentry>
                    <term>
-                       Environment_Name
+                       envname
                    </term>
                    <listitem>
                        <para>
@@ -6534,7 +6557,7 @@ special character (such as a parenthesis).
                </varlistentry>
                <varlistentry>
                    <term>
-           .           Dll_Name
+           .           dllname
                    </term>
                    <listitem>
                        <para>
@@ -6555,14 +6578,14 @@ special character (such as a parenthesis).
         <Component>RXSUBCOM</Component>
         <Severity>Error</Severity>
         <SymbolicName>Error_RXSUBC_load</SymbolicName>
-        <Text>The RXSUBCOM parameter LOAD is incorrect.</Text>
+        <Text>The RXSUBCOM LOAD parameters are incorrect.</Text>
         <Explanation>
-        <para>RXSUBCOM LOAD requires that the subcommand handler name be specified.
+        <para>RXSUBCOM LOAD requires the environment name be specified.
             <variablelist>
-                <title>RXSUBCOM LOAD Environment_Name [Dll_Name]</title>
+                <title>RXSUBCOM LOAD envname [dllname]</title>
                 <varlistentry>
                     <term>
-                        Environment_Name
+                        envname
                     </term>
                     <listitem>
                         <para>
@@ -6572,7 +6595,7 @@ special character (such as a parenthesis).
                 </varlistentry>
                 <varlistentry>
                     <term>
-            .           Dll_Name
+            .           dllname
                     </term>
                     <listitem>
                         <para>
@@ -6663,14 +6686,14 @@ special character (such as a parenthesis).
         <Component>RXSUBCOM</Component>
         <Severity>Error</Severity>
         <SymbolicName>Error_RXSUBC_query</SymbolicName>
-        <Text>The RXSUBCOM parameter QUERY is incorrect.</Text>
+        <Text>The RXSUBCOM QUERY parameters are incorrect.</Text>
         <Explanation>
         <para>RXSUBCOM QUERY requires the environment name be specified.
             <variablelist>
-                <title>RXSUBCOM QUERY Environment_Name [Dll_Name]</title>
+                <title>RXSUBCOM QUERY envname [dllname]</title>
                 <varlistentry>
                     <term>
-                        Environment_Name
+                        envname
                     </term>
                     <listitem>
                         <para>
@@ -6680,7 +6703,7 @@ special character (such as a parenthesis).
                 </varlistentry>
                 <varlistentry>
                     <term>
-            .           Dll_Name
+                        dllname
                     </term>
                     <listitem>
                         <para>
@@ -6701,15 +6724,16 @@ special character (such as a parenthesis).
         <Component>REXXC</Component>
         <Severity>Error</Severity>
         <SymbolicName>Error_REXXC_cmd_parm_incorrect</SymbolicName>
-        <Text>The REXXC command parameters are incorrect.</Text>
-        <Explanation><para>The REXXC utility was invoked with zero or more than three parameters.  REXXC accepts the following parameters:
+        <Text>The rexxc command parameters are incorrect.</Text>
+        <Explanation><para>The rexxc utility was invoked with zero or more than two parameters.  rexxc accepts the following parameters:
         <itemizedlist>
-        <listitem><para>To check the syntax of a REXX program: REXXC Program_name [-s]</para></listitem>
-        <listitem><para>To convert a REXX program into a sourceless executable file: REXXC Program_name Output_file_name [-s]</para></listitem>
-        <listitem><para>The -s option will suppress the copyright banner.</para></listitem>
+        <listitem><para>To check the syntax of a REXX program: rexxc inputfile [-s]</para></listitem>
+        <listitem><para>To translate a REXX program into a sourceless executable file: rexxc inputfile outputfile [-s] [-e]</para></listitem>
+        <listitem><para>The -s option suppresses the copyright banner and the -e option generates the outputfile in base64-encoded format.</para></listitem>
+        <listitem><para>On Windows the -s and -e options can alternatively be specified as /s and /e.</para></listitem>
         </itemizedlist>
         </para></Explanation>
-        <UserAction><para>Check the REXXC parameters and retry the command.</para></UserAction>
+        <UserAction><para>Check the rexxc parameters and retry the command.</para></UserAction>
       </SubMessage>
       <SubMessage>
         <Code>999</Code>
@@ -6727,7 +6751,7 @@ special character (such as a parenthesis).
         <Component>REXXC</Component>
         <Severity>Error</Severity>
         <SymbolicName>Error_REXXC_wrongNrArg</SymbolicName>
-        <Text>SYNTAX: REXXC InProgramName [OutProgramName] [/S].</Text>
+        <Text>SYNTAX: rexxc inputfile [outputfile] [-s] [-e]</Text>
       </SubMessage>
       <SubMessage>
         <Code>999</Code>
@@ -6736,7 +6760,7 @@ special character (such as a parenthesis).
         <Component>REXXC</Component>
         <Severity>Error</Severity>
         <SymbolicName>Error_REXXC_SynCheckInfo</SymbolicName>
-        <Text>Without OutProgramName REXXC only performs a syntax check.</Text>
+        <Text>Without outputfile rexxc only performs a syntax check.</Text>
       </SubMessage>
       <SubMessage>
         <Code>999</Code>
@@ -6755,15 +6779,6 @@ special character (such as a parenthesis).
         <Severity>Error</Severity>
         <SymbolicName>Error_RXQUE_memfail</SymbolicName>
         <Text>System error occurred while processing the command.</Text>
-      </SubMessage>
-      <SubMessage>
-        <Code>999</Code>
-        <Subcode>018</Subcode>
-        <MessageNumber>133</MessageNumber>
-        <Component>REXXC</Component>
-        <Severity>Error</Severity>
-        <SymbolicName>Error_REXXC_wrongNrArg_unix</SymbolicName>
-        <Text>SYNTAX: REXXC InProgramName [OutProgramName] [-s].</Text>
       </SubMessage>
     </Subcodes>
   </Message>

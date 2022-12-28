@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -80,6 +80,22 @@ void SystemInterpreter::getCurrentTime(RexxDateTime *Date )
     GMTDate->tm_isdst = -1;
     // in microseconds
     Date->timeZoneOffset = ((int64_t)(tv.tv_sec - mktime(GMTDate))) * 1000000UL;
+}
+
+
+/**
+ * Returns a high-resolution ticks value in nanoseconds well suited for
+ * execution speed measurements.  It is neither guaranteed to be the
+ * current time, nor that the actual resolution is nanoseconds (on Intel
+ * or AMD chips with invariant TSC support it is in the 100 ns range).
+ *
+ * @return The ticks value.
+ */
+int64_t SystemInterpreter::getNanosecondTicks()
+{
+    struct timespec time;
+    clock_gettime(CLOCK_REALTIME, &time);
+    return (int64_t)time.tv_sec * 1000000000 + time.tv_nsec;
 }
 
 
@@ -166,7 +182,7 @@ RexxMethod0(int, ticker_createTimer)
 }
 
 
-// wait for the ticer timer to trigger
+// wait for the ticker timer to trigger
 RexxMethod3(int, ticker_waitTimer, POINTER, eventSemHandle, wholenumber_t, numdays, wholenumber_t, alarmtime)
 {
     SysSemaphore *sem = (SysSemaphore *)eventSemHandle;
@@ -199,7 +215,15 @@ RexxMethod3(int, ticker_waitTimer, POINTER, eventSemHandle, wholenumber_t, numda
     }
 
     // now we can just wait for the alarm time to expire
-    sem->wait(alarmtime);
+    if (sem->wait(alarmtime))
+    {
+        // this was not a timeout, so most probably it was cancelled
+        if (context->GetObjectVariable("CANCELED") == context->True())
+        {
+            // delete the semaphore
+            delete sem;
+        }
+    }
     return 0;
 }
 
@@ -212,15 +236,4 @@ RexxMethod1(int, ticker_stopTimer, POINTER, eventSemHandle)
     sem->post();
     return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
 

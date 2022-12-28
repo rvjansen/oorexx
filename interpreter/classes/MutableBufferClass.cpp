@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -1321,7 +1321,7 @@ MutableBuffer *MutableBuffer::lower(RexxInteger *_start, RexxInteger *_length)
     // now uppercase in place
     for (size_t i = 0; i < rangeLength; i++)
     {
-        *bufferData = tolower(*bufferData);
+        *bufferData = Utilities::toLower(*bufferData);
         bufferData++;
     }
     return this;
@@ -1361,7 +1361,7 @@ MutableBuffer *MutableBuffer::upper(RexxInteger *_start, RexxInteger *_length)
     // now uppercase in place
     for (size_t i = 0; i < rangeLength; i++)
     {
-        *bufferData = toupper(*bufferData);
+        *bufferData = Utilities::toUpper(*bufferData);
         bufferData++;
     }
     return this;
@@ -1716,13 +1716,13 @@ RexxObject *MutableBuffer::caselessMatchChar(RexxInteger *position_, RexxString 
 
     size_t _setLength = matchSet->getLength();
     char         _matchChar = getChar(position - 1);
-    _matchChar = toupper(_matchChar);
+    _matchChar = Utilities::toUpper(_matchChar);
 
     // iterate through the match set looking for a match, using a
     // caseless compare
     for (size_t i = 0; i < _setLength; i++)
     {
-        if (_matchChar == toupper(matchSet->getChar(i)))
+        if (_matchChar == Utilities::toUpper(matchSet->getChar(i)))
         {
             return TheTrueObject;
         }

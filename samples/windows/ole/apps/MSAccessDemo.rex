@@ -1,10 +1,10 @@
 /*----------------------------------------------------------------------------*/
-/* Copyright (c) 2006-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2006-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -48,6 +48,9 @@
               getAddressingMode()
               createOleObject()
 
+   links:   <https://docs.microsoft.com/en-us/office/vba/api/overview/access>
+            <https://docs.microsoft.com/en-us/office/vba/access/concepts/miscellaneous/concepts-access-vba-reference>
+            <https://docs.microsoft.com/en-us/office/vba/api/overview/access/object-model>
 */
 
 -- This first function just checks to be sure the sample can execute on the

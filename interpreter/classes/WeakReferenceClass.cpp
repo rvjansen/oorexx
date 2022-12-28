@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -133,6 +133,10 @@ void WeakReference::liveGeneral(MarkReason reason)
     if (reason == SAVINGIMAGE || reason == RESTORINGIMAGE)
     {
         memory_mark_general(referentObject);
+        // this is no longer managed as a weak reference if it is in the
+        // image. Remove the link to the next item so that we don't store this information
+        // in the image file.
+        nextReferenceList = NULL;
     }
 }
 

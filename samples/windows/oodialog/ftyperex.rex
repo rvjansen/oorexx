@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -36,19 +36,19 @@
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /****************************************************************************/
-/* Name: FtypeRex.rex                                                       */
-/* Type: Object REXX Script                                                 */
+/* Name: ftyperex.rex                                                       */
+/* Type: ooRexx Script                                                      */
 /*                                                                          */
 /* Description:                                                             */
 /* This script reads the registry entries for the Ftype REXXScript OPEN     */
 /* type and allows to change it between REXX.EXE and REXXHIDE.EXE.          */
 /*                                                                          */
-/* It uses the WindowsRegistry Class and the UserDialog Class.         */
+/* It uses the WindowsRegistry Class and the UserDialog Class.              */
 /*                                                                          */
 /****************************************************************************/
 
 
-/* See, if user gaves directions */
+/* See if user gave directions */
 parse arg Interface
 
 /* The user may decide between Windowed or ooDialog Version */

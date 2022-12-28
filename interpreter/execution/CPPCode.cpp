@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -107,6 +107,12 @@ void CPPCode::liveGeneral(MarkReason reason)
     {
         package = TheRexxPackage;
     }
+    else if (reason == SAVINGIMAGE)
+    {
+        // if we're saving the image, zero the pointer value out so that this creates
+        // consistently repeatable build.
+        cppEntry = NULL;
+    }
     else if (reason == RESTORINGIMAGE || reason == UNFLATTENINGOBJECT)
     {
         cppEntry = exportedMethods[methodIndex];
@@ -129,16 +135,16 @@ void CPPCode::liveGeneral(MarkReason reason)
  * @param result   The returned result.
  */
 void CPPCode::run(Activity *activity, MethodClass *method, RexxObject *receiver, RexxString *messageName,
-    RexxObject **argPtr, size_t count, ProtectedObject &result)
+                  RexxObject **argPtr, size_t count, ProtectedObject &result)
 {
     InternalActivationFrame frame(activity, messageName, receiver, method, argPtr, count);
     PCPPM methodEntry = this->cppEntry;  /* get the entry point               */
-                                       /* expecting an array?               */
-                                       /* expecting a pointer/count pair?   */
+    /* expecting an array?               */
+    /* expecting a pointer/count pair?   */
     if (this->argumentCount == A_COUNT)
     {
-                                       /* we can pass this right on         */
-      result = (receiver->*((PCPPMC1)methodEntry))(argPtr, count);
+        /* we can pass this right on         */
+        result = (receiver->*((PCPPMC1)methodEntry))(argPtr, count);
     }
     else
     {
@@ -147,7 +153,7 @@ void CPPCode::run(Activity *activity, MethodClass *method, RexxObject *receiver,
             reportException(Error_Incorrect_method_maxarg, this->argumentCount);
         }
         // This is the temporary list of arguments
-        RexxObject * argument_list[7];
+        RexxObject *argument_list[7];
         if (count < argumentCount)              /* need to pad these out?            */
         {
             // null out the argument list
@@ -160,40 +166,40 @@ void CPPCode::run(Activity *activity, MethodClass *method, RexxObject *receiver,
         // now we make the actual call
         switch (argumentCount)
         {
-          case 0:                        /* zero                              */
-            result = (receiver->*((PCPPM0)methodEntry))();
-            break;
+            case 0:                        /* zero                              */
+                result = (receiver->*((PCPPM0)methodEntry))();
+                break;
 
-          case 1:
-            result = (receiver->*((PCPPM1)methodEntry))(argPtr[0]);
-            break;
+            case 1:
+                result = (receiver->*((PCPPM1)methodEntry))(argPtr[0]);
+                break;
 
-          case 2:
-            result = (receiver->*((PCPPM2)methodEntry))(argPtr[0], argPtr[1]);
-            break;
+            case 2:
+                result = (receiver->*((PCPPM2)methodEntry))(argPtr[0], argPtr[1]);
+                break;
 
-          case 3:
-            result = (receiver->*((PCPPM3)methodEntry))(argPtr[0], argPtr[1], argPtr[2]);
-            break;
+            case 3:
+                result = (receiver->*((PCPPM3)methodEntry))(argPtr[0], argPtr[1], argPtr[2]);
+                break;
 
-          case 4:
-            result = (receiver->*((PCPPM4)methodEntry))(argPtr[0], argPtr[1], argPtr[2], argPtr[3]);
-            break;
+            case 4:
+                result = (receiver->*((PCPPM4)methodEntry))(argPtr[0], argPtr[1], argPtr[2], argPtr[3]);
+                break;
 
-          case 5:
-            result = (receiver->*((PCPPM5)methodEntry))(argPtr[0], argPtr[1], argPtr[2],
-                argPtr[3], argPtr[4]);
-            break;
+            case 5:
+                result = (receiver->*((PCPPM5)methodEntry))(argPtr[0], argPtr[1], argPtr[2],
+                                                            argPtr[3], argPtr[4]);
+                break;
 
-          case 6:
-            result = (receiver->*((PCPPM6)methodEntry))(argPtr[0], argPtr[1], argPtr[2],
-                argPtr[3], argPtr[4], argPtr[5]);
-            break;
+            case 6:
+                result = (receiver->*((PCPPM6)methodEntry))(argPtr[0], argPtr[1], argPtr[2],
+                                                            argPtr[3], argPtr[4], argPtr[5]);
+                break;
 
-          case 7:
-            result = (receiver->*((PCPPM7)methodEntry))(argPtr[0], argPtr[1], argPtr[2],
-                argPtr[3], argPtr[4], argPtr[5], argPtr[6]);
-            break;
+            case 7:
+                result = (receiver->*((PCPPM7)methodEntry))(argPtr[0], argPtr[1], argPtr[2],
+                                                            argPtr[3], argPtr[4], argPtr[5], argPtr[6]);
+                break;
         }
     }
 }
@@ -206,7 +212,7 @@ void CPPCode::run(Activity *activity, MethodClass *method, RexxObject *receiver,
  *
  * @return A pointer to the newly allocated object.
  */
-void *AttributeGetterCode::operator new(size_t size)
+void* AttributeGetterCode::operator new(size_t size)
 {
     return new_object(size, T_AttributeGetterCode);
 }
@@ -219,6 +225,7 @@ void *AttributeGetterCode::operator new(size_t size)
  */
 void AttributeGetterCode::live(size_t liveMark)
 {
+    memory_mark(package);
     memory_mark(attribute);
 }
 
@@ -230,6 +237,14 @@ void AttributeGetterCode::live(size_t liveMark)
  */
 void AttributeGetterCode::liveGeneral(MarkReason reason)
 {
+    // if we're getting ready to save the image, replace the source
+    // package with the global REXX package
+    if (reason == PREPARINGIMAGE)
+    {
+        package = TheRexxPackage;
+    }
+
+    memory_mark_general(package);
     memory_mark_general(attribute);
 }
 
@@ -243,6 +258,7 @@ void AttributeGetterCode::flatten(Envelope *envelope)
 {
     setUpFlatten(AttributeGetterCode)
 
+    flattenRef(package);
     flattenRef(attribute);
 
     cleanUpFlatten
@@ -262,7 +278,7 @@ void AttributeGetterCode::flatten(Envelope *envelope)
  * @param result   The returned result.
  */
 void AttributeGetterCode::run(Activity *activity, MethodClass *method, RexxObject *receiver, RexxString *messageName,
-    RexxObject **argPtr, size_t count, ProtectedObject &result)
+                              RexxObject **argPtr, size_t count, ProtectedObject &result)
 {
     // validate the number of arguments
     if (count > 0)
@@ -293,7 +309,7 @@ void AttributeGetterCode::run(Activity *activity, MethodClass *method, RexxObjec
  *
  * @return A pointer to the newly allocated object.
  */
-void *AttributeSetterCode::operator new(size_t size)
+void* AttributeSetterCode::operator new(size_t size)
 {
     return new_object(size, T_AttributeSetterCode);
 }
@@ -312,7 +328,7 @@ void *AttributeSetterCode::operator new(size_t size)
  * @param result   The returned result.
  */
 void AttributeSetterCode::run(Activity *activity, MethodClass *method, RexxObject *receiver, RexxString *messageName,
-    RexxObject **argPtr, size_t count, ProtectedObject &result)
+                              RexxObject **argPtr, size_t count, ProtectedObject &result)
 {
     // validate the number of arguments
     if (count > 1)
@@ -351,9 +367,9 @@ void AttributeSetterCode::run(Activity *activity, MethodClass *method, RexxObjec
  *
  * @return A pointer to the newly allocated object.
  */
-void *ConstantGetterCode::operator new(size_t size)
+void* ConstantGetterCode::operator new(size_t size)
 {
-    return new_object(size, T_AttributeGetterCode);
+    return new_object(size, T_ConstantGetterCode);
 }
 
 
@@ -364,6 +380,7 @@ void *ConstantGetterCode::operator new(size_t size)
  */
 void ConstantGetterCode::live(size_t liveMark)
 {
+    memory_mark(package);
     memory_mark(constantValue);
     memory_mark(constantName);
 }
@@ -376,6 +393,14 @@ void ConstantGetterCode::live(size_t liveMark)
  */
 void ConstantGetterCode::liveGeneral(MarkReason reason)
 {
+    // if we're getting ready to save the image, replace the source
+    // package with the global REXX package
+    if (reason == PREPARINGIMAGE)
+    {
+        package = TheRexxPackage;
+    }
+
+    memory_mark_general(package);
     memory_mark_general(constantValue);
     memory_mark_general(constantName);
 }
@@ -390,6 +415,7 @@ void ConstantGetterCode::flatten(Envelope *envelope)
 {
     setUpFlatten(ConstantGetterCode)
 
+    flattenRef(package);
     flattenRef(constantValue);
     flattenRef(constantName);
 
@@ -410,7 +436,7 @@ void ConstantGetterCode::flatten(Envelope *envelope)
  * @param result   The returned result.
  */
 void ConstantGetterCode::run(Activity *activity, MethodClass *method, RexxObject *receiver, RexxString *messageName,
-    RexxObject **argPtr, size_t count, ProtectedObject &result)
+                             RexxObject **argPtr, size_t count, ProtectedObject &result)
 {
     // validate the number of arguments
     if (count > 0)
@@ -435,9 +461,53 @@ void ConstantGetterCode::run(Activity *activity, MethodClass *method, RexxObject
  *
  * @return A pointer to the newly allocated object.
  */
-void *AbstractCode::operator new(size_t size)
+void* AbstractCode::operator new(size_t size)
 {
     return new_object(size, T_AbstractCode);
+}
+
+
+/**
+ * Normal garbage collection live marking
+ *
+ * @param liveMark The current live mark.
+ */
+void AbstractCode::live(size_t liveMark)
+{
+    memory_mark(package);
+}
+
+
+/**
+ * Generalized object marking.  If restoring or unflattening,
+ * make sure we restore the method pointer.
+ *
+ * @param reason The reason for the call.
+ */
+void AbstractCode::liveGeneral(MarkReason reason)
+{
+    // if we're getting ready to save the image, replace the source
+    // package with the global REXX package
+    if (reason == PREPARINGIMAGE)
+    {
+        package = TheRexxPackage;
+    }
+    memory_mark_general(package);
+}
+
+
+/**
+ * Flatten an AbstractCode object.
+ *
+ * @param envelope the target envelope we're flatting in.
+ */
+void AbstractCode::flatten(Envelope *envelope)
+{
+    setUpFlatten(AbstractCode)
+
+    flattenRef(package);
+
+    cleanUpFlatten
 }
 
 
@@ -454,7 +524,7 @@ void *AbstractCode::operator new(size_t size)
  * @param result   The returned result.
  */
 void AbstractCode::run(Activity *activity, MethodClass *method, RexxObject *receiver, RexxString *messageName,
-    RexxObject **argPtr, size_t count, ProtectedObject &result)
+                       RexxObject **argPtr, size_t count, ProtectedObject &result)
 {
     reportException(Error_Incorrect_method_abstract, messageName);
 }
@@ -467,7 +537,7 @@ void AbstractCode::run(Activity *activity, MethodClass *method, RexxObject *rece
  *
  * @return A pointer to the newly allocated object.
  */
-void *DelegateCode::operator new(size_t size)
+void* DelegateCode::operator new(size_t size)
 {
     return new_object(size, T_DelegateCode);
 }
@@ -480,6 +550,7 @@ void *DelegateCode::operator new(size_t size)
  */
 void DelegateCode::live(size_t liveMark)
 {
+    memory_mark(package);
     memory_mark(attribute);
 }
 
@@ -491,6 +562,14 @@ void DelegateCode::live(size_t liveMark)
  */
 void DelegateCode::liveGeneral(MarkReason reason)
 {
+    // if we're getting ready to save the image, replace the source
+    // package with the global REXX package
+    if (reason == PREPARINGIMAGE)
+    {
+        package = TheRexxPackage;
+    }
+
+    memory_mark_general(package);
     memory_mark_general(attribute);
 }
 
@@ -504,6 +583,7 @@ void DelegateCode::flatten(Envelope *envelope)
 {
     setUpFlatten(DelegateCode)
 
+    flattenRef(package);
     flattenRef(attribute);
 
     cleanUpFlatten
@@ -1219,6 +1299,7 @@ PCPPM CPPCode::exportedMethods[] =
     CPPM(RexxInfo::getMaxArraySize),
     CPPM(RexxInfo::getRexxExecutable),
     CPPM(RexxInfo::getRexxLibrary),
+    CPPM(RexxInfo::getDebug),
 
     CPPM(VariableReference::newRexx),
     CPPM(VariableReference::getName),

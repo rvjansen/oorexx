@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2017 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -72,16 +72,14 @@ class ArrayClass : public RexxObject
     {
      public:
 
-       inline void copy() { copyElements(1); }
-       void copyElements(size_t newDimension);
+       void copy();
+       void copyElements(size_t newDimension, size_t oldOffset, size_t newOffset);
+       void copyBlocks(size_t dimension, size_t oldOffset, size_t newOffset);
+       void getBlockSizes(size_t dimension, size_t &oldBlock, size_t &newBlock);
 
        ArrayClass *newArray;             // the array we're copying into
        ArrayClass *oldArray;             // the array we're copying from
-       size_t highestDimension;          // the point to start copying items.
-       size_t elementsToCopy;            // the number of elements to copy at this level
-       size_t elementsToSkip;            // the size difference between dimensions at this level
-       size_t startNew;                  // the starting position for copying into the new array on a given level
-       size_t startOld;                  // starting position for copying from the old array
+       size_t totalDimensions;           // number of dimension to process
     };
 
 
@@ -327,6 +325,8 @@ class ArrayClass : public RexxObject
     static ArrayClass *nullArray;
 
     static const size_t DefaultArraySize = 16;     // default size for ooRexx allocation
+    // maximum Array size we can handle
+    static const size_t MaxFixedArraySize = (Numerics::MAX_WHOLENUMBER / 10) + 1;
 
  protected:
 
@@ -339,8 +339,6 @@ class ArrayClass : public RexxObject
     inline RexxInternalObject **slotAddress(size_t index) { return &(data()[index - 1]); }
     inline size_t       dataSize() { return ((char *)slotAddress(size() + 1)) - ((char *)data()); }
 
-    // maximum size we can handle
-    static const size_t MaxFixedArraySize = (Numerics::MAX_WHOLENUMBER / 10) + 1;
     static const size_t MinimumArraySize;      // the minimum size we allocate.
     // for small Arrays, we expand by doubling the current size, however
     // for Arrays larger than this limit, we just extend by half the current size

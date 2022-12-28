@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -61,6 +61,14 @@ class SysFileSystem
          MaximumFileNameBuffer = MAX_PATH + FILENAME_MAX
      };
 
+     // getFiletime flags
+     typedef enum
+     {
+         FiletimeAccess,
+         FiletimeWrite,
+         FiletimeCreation,
+     } FiletimeType;
+
      static int stdinHandle;
      static int stdoutHandle;
      static int stderrHandle;
@@ -76,6 +84,8 @@ class SysFileSystem
      static bool  searchPath(const char *name, const char *path, FileNameBuffer &resolvedName);
      static void  qualifyStreamName(const char *unqualifiedName, FileNameBuffer &qualifiedName);
      static bool  getFullPathName(const char *name, FileNameBuffer &resolvedName);
+     static DWORD getFileAttributes(const char *name);
+     static bool  getFiletime(const char *name, FiletimeType type, FILETIME *time);
      static bool  fileExists(const char *name);
      static bool  hasExtension(const char *name);
      static bool  hasDirectory(const char *name);
@@ -86,7 +96,7 @@ class SysFileSystem
      static bool  primitiveSearchName(const char *name, const char *path, const char *extension, FileNameBuffer &resolvedName);
      static bool  checkCurrentFile(const char *name, FileNameBuffer &resolvedName);
      static void  getLongName(FileNameBuffer &name);
-     static bool  findFirstFile(const char *name);
+     static void  getProperPathCase(FileNameBuffer &name);
      static int   deleteFile(const char *name);
      static int   deleteDirectory(const char *name);
      static bool  isDirectory(const char *name);
@@ -168,13 +178,11 @@ class SysFileIterator
 class AutoErrorMode
 {
  public:
-     AutoErrorMode(UINT m) { errorMode = SetErrorMode(SEM_FAILCRITICALERRORS); }
-     ~AutoErrorMode() { SetErrorMode(SEM_FAILCRITICALERRORS); }
+     AutoErrorMode(UINT m) { errorMode = SetErrorMode(m); }
+     ~AutoErrorMode() { SetErrorMode(errorMode); }
  private:
      UINT errorMode;   // the old error mode
 };
 
 
-
 #endif
-

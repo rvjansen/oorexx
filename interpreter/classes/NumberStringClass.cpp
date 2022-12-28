@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -49,11 +49,16 @@
 #include "Numerics.hpp"
 #include "StringUtil.hpp"
 #include "MethodArguments.hpp"
+#include "Interpreter.hpp"
 
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
 #include <ctype.h>
+#include <locale.h>   // localeconv
+#ifdef HAVE_XLOCALE_H
+# include <xlocale.h> // localeconv on BSD
+#endif
 #include <cmath>
 #include <cfloat>
 
@@ -699,10 +704,48 @@ bool NumberString::unsignedNumberValue(size_t &result, wholenumber_t numDigits)
 bool NumberString::doubleValue(double &result)
 {
     // build this from the string value
-    RexxString *string = stringValue();
+    const char *string = stringValue()->getStringData();
     // use the C library routine to convert this to a double value since we
     // use compatible formats
-    result = strtod(string->getStringData(), NULL);
+
+    // strtod() is locale-dependent, and we cannot be sure that we run under
+    // the default "C" locale, as some badly behaved native code (a known
+    // example being BSF.CLS) may have called setlocale(LC_ALL, "") or similar.
+
+    // strtod_l() is available on many platforms, but e. g. Openindiana is
+    // missing it.  Switching back and forth with uselocale() would work
+    // (maybe slow), but uselocale() isn't readily available on Windws,
+    // where it would require setlocale() together with
+    // _configthreadlocale(_ENABLE_PER_THREAD_LOCALE).  We instead employ a
+    // hack: should the current locale not have the dot as decimal radix, we
+    // replace any dot with the current locale radix before conversion.
+
+    char localeRadix = *localeconv()->decimal_point;
+
+    // if the current locale uses a dot as radix, just do a straight conversion
+    // (very common)
+    if (localeRadix == '.')
+    {
+        result = strtod(string, NULL);
+    }
+    else
+    {
+        // The current locale uses no dot.  Change any dot to locale radix
+        // before conversion, but don't modify the Rexx string itself.
+        char *str = strdup(string);
+        if (str == NULL)
+        {
+            return false;
+        }
+        char *dotPos = strchr(str, '.');
+        if (dotPos != NULL)
+        {
+            *dotPos = localeRadix;
+        }
+        result = strtod(str, NULL);
+        free(str);
+    }
+
     // and let pass all of the special cases
     return true;
 }
@@ -1296,7 +1339,7 @@ bool numberStringScan(const char *number, size_t length)
     }
 
     // we're at a non-digit.  Check for the start of an exponent.
-    if (toupper(*inPtr) == 'E')
+    if (*inPtr == 'E' || *inPtr == 'e')
     {
         // we must have digits after this...fail if this the end of the string.
         if (++inPtr >= endData)
@@ -1969,7 +2012,6 @@ RexxString *NumberString::formatInternal(wholenumber_t integers, wholenumber_t d
     wholenumber_t decimalDigits = 0;
     wholenumber_t decimalSpace = 0;
     wholenumber_t leadingExpZeros = 0;
-    wholenumber_t exponentSpaces = 0;
     wholenumber_t trailingDecimalZeros = 0;
     wholenumber_t exponentSize = 0;
 
@@ -2167,6 +2209,15 @@ RexxString *NumberString::formatInternal(wholenumber_t integers, wholenumber_t d
             else
             {
                 decimalDigits = adjustedDecimals;
+            }
+
+            // this can happen if there is a round out on the top digit when we
+            // are truncating and exponential notation is now required. In that situation
+            // we have more decimals that we are allowed to use
+            if (adjustedDecimals > decimals)
+            {
+                adjustedDecimals = decimals;
+                decimalDigits = decimals;
             }
             // in theory, everything has been adjusted to the point where
             // decimals is >= to the adjusted size
@@ -3760,7 +3811,7 @@ NumberString *NumberString::Min(RexxObject **args, size_t argCount)
 
 
 /**
- * This method determines if the formatted numberstring is s true integer
+ * This method determines if the formatted numberstring is a true integer
  * string.  That is, its not of the form 1.00E3 but 1000
  *
  * @return true if this can be represented as a true whole number value,
@@ -3782,7 +3833,6 @@ bool NumberString::isInteger()
         return true;
     }
 
-    wholenumber_t expFactor = 0;
     // get size of the integer part of this number
     wholenumber_t adjustedLength = numberExponent + digitsCount;
     // ok, now do the exponent check...if we need one, not an integer
@@ -3798,20 +3848,8 @@ bool NumberString::isInteger()
         return true;
     }
 
-    // get the adjusted length (expValue is negative, so this will
-    // be less than length of the string).
-    wholenumber_t integers = numberExponent + digitsCount;
-    wholenumber_t decimals = digitsCount - integers;
-    // we can have a number of leading zeros for a decimal number,
-    // so it is possible all of our digits are decimals.
-    if (integers < 0)
-    {
-        integers = 0;
-        decimals = digitsCount;
-    }
-
     // validate that all decimal positions are zero
-    for (wholenumber_t numIndex = integers; numIndex < digitsCount; numIndex++)
+    for (wholenumber_t numIndex = adjustedLength; numIndex < digitsCount; numIndex++)
     {
         if (numberDigits[numIndex] != 0)
         {
@@ -4037,22 +4075,44 @@ NumberString *NumberString::newInstanceFromDouble(double number, wholenumber_t p
     // special strings for those.
     if (std::isnan(number))
     {
-        return (NumberString *)new_string("nan");
+        return (NumberString *)GlobalNames::NAN_VAL;
     }
     else if (number == +HUGE_VAL)
     {
-        return (NumberString *)new_string("+infinity");
+        return (NumberString *)GlobalNames::INFINITY_PLUS;
     }
     else if (number == -HUGE_VAL)
     {
-        return (NumberString *)new_string("-infinity");
+        return (NumberString *)GlobalNames::INFINITY_MINUS;
     }
 
+    // with precision restricted to a maximum of 16, the length of a %.*g
+    // string can be up to 23 characters, e. g. -1.234567890123457e-308
+    char doubleStr[32]; // allow for + 2 precision, NUL, and margin
 
-    // Max length of double str is 22, make 32 just to be safe
-    char doubleStr[32];
-    // get double as a string value, using the provided precision
-    sprintf(doubleStr, "%.*g", (int)(precision + 2), number);
+    // get double as a string value, using the provided precision (16 at most)
+    snprintf(doubleStr, sizeof(doubleStr), "%.*g", std::min(16, (int)precision) + 2, number);
+
+    // snprintf() is locale-dependent, and we cannot be sure that we run under
+    // the default "C" locale, as some badly behaved native code (a known
+    // example being BSF.CLS) may have called setlocale(LC_ALL, "") or similar.
+    // As snprintf_l() only exists on BSD-based and Windows systems and
+    // uselocale() isn't readily available on Windws, where it would require
+    // setlocale() together with _configthreadlocale(_ENABLE_PER_THREAD_LOCALE),
+    // we employ a hack: should the current locale not have the dot as decimal
+    // radix, we replace the actual radix with a dot in the converted string.
+    char radixChar = *localeconv()->decimal_point;
+    if (radixChar != '.')
+    {
+        // find the locale radix position in the converted string
+        char *radixPos = strchr(doubleStr, radixChar);
+        if (radixPos != NULL)
+        {
+            // we found a locale radix .. convert it to a dot
+            *radixPos = '.';
+        }
+    }
+
     size_t resultLen = strlen(doubleStr);
     // create a new number string with this size
     NumberString *result = new (resultLen) NumberString (resultLen, precision);
@@ -4128,7 +4188,7 @@ NumberString *NumberString::newInstanceFromUint64(uint64_t integer)
     return newNumber;
 }
 
-// the numbersstring operator table
+// the numberstring operator table
 PCPPM NumberString::operatorMethods[] =
 {
    NULL,                               // first entry not used

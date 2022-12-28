@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -45,7 +45,6 @@
 #include "ObjectClass.hpp"
 #include "StringClass.hpp"
 #include "BufferClass.hpp"
-#include "SmartBuffer.hpp"
 #include "DirectoryClass.hpp"
 #include "VariableDictionary.hpp"
 #include "ArrayClass.hpp"
@@ -425,11 +424,10 @@ HashCode RexxObject::hash()
         // by sending the HASHCODE() message.
         sendMessage(GlobalNames::HASHCODE, result);
 
-        // TODO:  Add a test for this condition
         // we need to have a return value for this.
         if (result.isNull())
         {
-            reportException(Error_No_result_object_message, new_string("HASHCODE"));
+            reportException(Error_No_result_object_message, GlobalNames::HASHCODE);
         }
 
         // the default version sends us a string containing binary data.
@@ -921,6 +919,9 @@ RexxObject *RexxObject::messageSend(RexxString *msgname, RexxObject **arguments,
 RexxObject *RexxObject::messageSend(RexxString *msgname, RexxObject **arguments, size_t count,
     RexxClass *startscope, ProtectedObject &result)
 {
+    // validate that the scope override is valid (FORWARD uses this method, this way no need to check TO option)
+    validateScopeOverride(startscope);
+
     // perform a stack space check
     ActivityManager::currentActivity->checkStackSpace();
 
@@ -1377,7 +1378,7 @@ RexxString *RexxInternalObject::requiredString(size_t position )
     // if this did not convert, give the error message
     if (string_value == TheNilObject)
     {
-        reportException(Error_Incorrect_method_nostring, position);
+        reportException(Error_Invalid_argument_string, position);
     }
 
     // we should have a real string object here.
@@ -1667,6 +1668,27 @@ ArrayClass *RexxInternalObject::requestArray()
 
 
 /**
+ * Request a double floating point number value from an object in a
+ * situation where a value is required.
+ *
+ * @param position  The position of the argument used for error reporting.
+ * @param precision The conversion precision.
+ *
+ * @return The double floating point number.
+ */
+double RexxInternalObject::requiredFloat(const char *position)
+{
+    double result;
+
+    if (!doubleValue(result))
+    {
+        reportException(Error_Invalid_argument_number, position, (RexxObject *)this);
+    }
+    return result;
+}
+
+
+/**
  * Retrieve the object name for an object.
  *
  * @return An explicitly set object name or the default object name value.
@@ -1922,45 +1944,13 @@ RexxObject *RexxObject::requestRexx(RexxString *name)
  */
 void RexxObject::validateScopeOverride(RexxClass *scope)
 {
+    // validate the starting scope if we've been given one
     if (scope != OREF_NULL)
     {
-        if (!isInstanceOf(scope))
+        if (! this->behaviour->hasScope((RexxClass *)scope))
         {
             reportException(Error_Incorrect_method_array_noclass, this, scope);
         }
-    }
-}
-
-
-/**
- * Validate that this is an appropriate context for invoking
- * a superclass override.
- *
- * @param target The invocation target object.
- */
-void RexxObject::validateOverrideContext(RexxObject *target, RexxClass *scope)
-{
-    // no scope override, so this is good
-    if (scope == OREF_NULL)
-    {
-        return;
-    }
-
-    // validate the message creator now
-    ActivationBase *activation = ActivityManager::currentActivity->getTopStackFrame();
-    // have an activation?
-    if (activation != OREF_NULL)
-    {
-        // get the receiving object
-        RexxObject *sender = activation->getReceiver();
-        if (sender != target)
-        {
-            reportException(Error_Execution_super);
-        }
-    }
-    else
-    {
-        reportException(Error_Execution_super);
     }
 }
 
@@ -1992,7 +1982,6 @@ RexxObject *RexxObject::sendWith(RexxObject *message, ArrayClass *args)
     {
         // validate that the scope override is valid
         validateScopeOverride(startScope);
-        validateOverrideContext(this, startScope);
         messageSend(messageName, arguments->messageArgs(), arguments->messageArgCount(), startScope, r);
     }
     return (RexxObject *)r;
@@ -2033,7 +2022,6 @@ RexxObject *RexxObject::send(RexxObject **arguments, size_t argCount)
     {
         // validate that the scope override is valid
         validateScopeOverride(startScope);
-        validateOverrideContext(this, startScope);
         messageSend(messageName, arguments + 1, argCount - 1, startScope, r);
     }
     return (RexxObject *)r;
@@ -2108,7 +2096,6 @@ MessageClass *RexxObject::startCommon(RexxObject *message, RexxObject **argument
     // validate the starting scope now, if specified.  We'll validate this in this
     // thread first.
     validateScopeOverride(startScope);
-    validateOverrideContext(this, startScope);
 
     // creeate the new message object and start it.
     Protected<ArrayClass> argArray = new_array(argCount, arguments);
@@ -2207,7 +2194,6 @@ RexxObject *RexxObject::run(RexxObject **arguments, size_t argCount)
     requiredArgument(methobj, "method");
     // make sure we have a method object, including creating one from source if necessary
     methobj = MethodClass::newMethodObject(GlobalNames::RUN, (RexxObject *)methobj, (RexxClass *)TheNilObject, "method");
-    Protected<ArrayClass> argList;
 
     // if we have arguments, decode how we are supposed to handle method arguments.
     if (argCount > 1)
@@ -2682,6 +2668,66 @@ RexxInternalObject *RexxInternalObject::clone()
 }
 
 
+/**
+ * Provide a dump of the header part of an object. This is generally
+ * used when an invalid heap object is detected during garbage collection.
+ */
+void RexxInternalObject::dumpObject()
+{
+    printf("GC detected invalid object size=%zd (type=%zd, min=%zd, grain=%zd)" line_end, getObjectSize(), getObjectTypeNumber(), Memory::MinimumObjectSize, Memory::ObjectGrain);
+    // hexdump the first 64 bytes
+    unsigned char *s = (unsigned char *)this;
+    for (int lines = 1; lines <= 2; lines++)
+    {
+        for (int blocks = 1; blocks <= 8; blocks++)
+        {
+            printf("%02x%02x%02x%02x ", *s, *(s + 1), *(s + 2), *(s + 3));
+            s += 4;
+        }
+        printf(line_end);
+    }
+}
+
+
+/**
+ * Perform a simple validation on an object so we can detect corrupted
+ * objects during garbage collection
+ *
+ * @return True if the object is value, false if it fails any of the validity tests.
+ */
+bool RexxInternalObject::isValid()
+{
+    // Test #1, is the size valid
+    if (!Memory::isValidSize(getObjectSize()))
+    {
+        return false;
+    }
+
+#if 0
+    // The following tests seem line a good idea, but unfortunately
+    // it only works with live objects. A dead object on the pool
+    // has neither a valid bahaviour pointer nor a valid virtual function pointer.
+    // I'm leaving this in here just in case we figure out how to make these tests work.
+
+    size_t typeNumber = getObjectTypeNumber();
+    // Test #2 is the type indicator correct?
+    if (typeNumber > T_Last_Class_Type)
+    {
+        return false;
+    }
+    // Test #3, is the object's virtual function pointer the correct one for the type.
+    // this can detect problems where the front part of the object has been overlayed.
+    if (!checkVirtualFunctions(memoryObject.virtualFunctionTable[typeNumber]))
+    {
+        return false;
+    }
+#endif
+
+    // the object is at least consistent
+    return true;
+}
+
+
 // macros for defining the standard operator methods.  These are
 // essentially the same except for the names and the message target
 #undef operatorMethod
@@ -2850,8 +2896,10 @@ RexxObject *RexxObject::hasMethodRexx(RexxString *message )
  */
 RexxNilObject::RexxNilObject()
 {
-    // use the initial identify hash and save this.
-    hashValue = identityHash();
+    // The nil object needs to use a static hashcode so it remains
+    // the same after an image install. We use an arbitrary hardcoded value
+    // so that we get a constant value in the saved image file.
+    hashValue = 0xDEADBEEF;
     // we are a special proxy object.
     makeProxiedObject();
 }

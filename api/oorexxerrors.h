@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -60,8 +60,7 @@
 #define Rexx_Error_Program_unreadable_notfound                            3901
 #define Rexx_Error_Program_unreadable_output_error                        3902
 #define Rexx_Error_Program_unreadable_version                             3903
-#define Rexx_Error_Program_unreadable_invalid_encoding                    3904
-#define Rexx_Error_Program_not_tokenized                                  3904
+#define Rexx_Error_Program_unreadable_invalid_encoding                    3905
 #define Rexx_Error_Program_interrupted                                    4000
 #define Rexx_Error_Program_interrupted_condition                          4001
 #define Rexx_Error_Program_interrupted_user_defined                       4900
@@ -86,9 +85,9 @@
 #define Rexx_Error_Unexpected_end_nodo                                    10001
 #define Rexx_Error_Unexpected_end_control                                 10002
 #define Rexx_Error_Unexpected_end_nocontrol                               10003
+#define Rexx_Error_Unexpected_end_select                                  10004
 #define Rexx_Error_Unexpected_end_then                                    10005
 #define Rexx_Error_Unexpected_end_else                                    10006
-#define Rexx_Error_Unexpected_end_select                                  10004
 #define Rexx_Error_Unexpected_end_select_nolabel                          10007
 #define Rexx_Error_Control_stack                                          11000
 #define Rexx_Error_Control_stack_full                                     11001
@@ -202,8 +201,8 @@
 #define Rexx_Error_Invalid_data_resource_dir                              21914
 #define Rexx_Error_Invalid_character_string                               22000
 #define Rexx_Error_Invalid_character_string_char                          22001
-#define Rexx_Error_Invalid_character_string_DBCS                          22901
 #define Rexx_Error_Invalid_character_string_user_defined                  22900
+#define Rexx_Error_Invalid_character_string_DBCS                          22901
 #define Rexx_Error_Invalid_data_string                                    23000
 #define Rexx_Error_Invalid_data_string_char                               23001
 #define Rexx_Error_Invalid_data_string_user_defined                       23900
@@ -225,8 +224,6 @@
 #define Rexx_Error_Invalid_subkeyword_routine                             25903
 #define Rexx_Error_Invalid_subkeyword_requires                            25904
 #define Rexx_Error_Invalid_subkeyword_use                                 25905
-#define Rexx_Error_Invalid_subkeyword_callonname                          25914
-#define Rexx_Error_Invalid_subkeyword_signalonname                        25915
 #define Rexx_Error_Invalid_subkeyword_raise                               25906
 #define Rexx_Error_Invalid_subkeyword_raiseoption                         25907
 #define Rexx_Error_Invalid_subkeyword_description                         25908
@@ -234,6 +231,8 @@
 #define Rexx_Error_Invalid_subkeyword_result                              25911
 #define Rexx_Error_Invalid_subkeyword_guard_on                            25912
 #define Rexx_Error_Invalid_subkeyword_guard                               25913
+#define Rexx_Error_Invalid_subkeyword_callonname                          25914
+#define Rexx_Error_Invalid_subkeyword_signalonname                        25915
 #define Rexx_Error_Invalid_subkeyword_forward_option                      25916
 #define Rexx_Error_Invalid_subkeyword_to                                  25917
 #define Rexx_Error_Invalid_subkeyword_arguments                           25918
@@ -262,8 +261,8 @@
 #define Rexx_Error_Invalid_whole_number_power                             26008
 #define Rexx_Error_Invalid_whole_number_intdiv                            26011
 #define Rexx_Error_Invalid_whole_number_rem                               26012
-#define Rexx_Error_Invalid_whole_number_method                            26901
 #define Rexx_Error_Invalid_whole_number_user_defined                      26900
+#define Rexx_Error_Invalid_whole_number_method                            26901
 #define Rexx_Error_Invalid_whole_number_compareto                         26902
 #define Rexx_Error_Invalid_whole_number_compare                           26903
 #define Rexx_Error_Invalid_whole_number_stem_array_index                  26904
@@ -284,10 +283,7 @@
 #define Rexx_Error_Environment_name_name                                  29001
 #define Rexx_Error_Name_too_long                                          30000
 #define Rexx_Error_Name_too_long_name                                     30001
-#define Rexx_Error_Name_too_long_string                                   30002
 #define Rexx_Error_Name_too_long_user_defined                             30900
-#define Rexx_Error_Name_too_long_hex                                      30901
-#define Rexx_Error_Name_too_long_bin                                      30902
 #define Rexx_Error_Invalid_variable                                       31000
 #define Rexx_Error_Invalid_variable_assign                                31001
 #define Rexx_Error_Invalid_variable_number                                31002
@@ -412,6 +408,7 @@
 #define Rexx_Error_Incorrect_call_stem_size                               40922
 #define Rexx_Error_Incorrect_call_stem_range                              40923
 #define Rexx_Error_Incorrect_call_stem_sparse_array                       40924
+#define Rexx_Error_Incorrect_call_noarray_nostem                          40925
 #define Rexx_Error_Conversion                                             41000
 #define Rexx_Error_Conversion_operator                                    41001
 #define Rexx_Error_Conversion_prefix                                      41003
@@ -431,8 +428,8 @@
 #define Rexx_Error_Overflow_power                                         42903
 #define Rexx_Error_Routine_not_found                                      43000
 #define Rexx_Error_Routine_not_found_name                                 43001
-#define Rexx_Error_Routine_not_found_requires                             43901
 #define Rexx_Error_Routine_not_found_user_defined                         43900
+#define Rexx_Error_Routine_not_found_requires                             43901
 #define Rexx_Error_Routine_not_found_namespace                            43902
 #define Rexx_Error_Function_no_data                                       44000
 #define Rexx_Error_Function_no_data_function                              44001
@@ -529,7 +526,6 @@
 #define Rexx_Error_Incorrect_method_symbol                                93913
 #define Rexx_Error_Incorrect_method_list                                  93914
 #define Rexx_Error_Incorrect_method_option                                93915
-#define Rexx_Error_Incorrect_method_string                                93916
 #define Rexx_Error_Incorrect_method_methodname                            93917
 #define Rexx_Error_Incorrect_method_index                                 93918
 #define Rexx_Error_Incorrect_method_array                                 93919
@@ -632,6 +628,12 @@
 #define Rexx_Error_Execution_forward                                      98947
 #define Rexx_Error_Execution_authorization                                98948
 #define Rexx_Error_Execution_no_concurrency                               98951
+#define Rexx_Error_Execution_circular_requires                            98952
+#define Rexx_Error_Execution_error_syntax                                 98970
+#define Rexx_Error_Execution_failure_syntax                               98971
+#define Rexx_Error_Execution_lostdigits_syntax                            98972
+#define Rexx_Error_Execution_nostring_syntax                              98973
+#define Rexx_Error_Execution_notready_syntax                              98974
 #define Rexx_Error_Execution_sparse_array                                 98975
 #define Rexx_Error_Execution_nostem                                       98976
 #define Rexx_Error_Execution_library_method                               98978
@@ -679,8 +681,8 @@
 #define Rexx_Error_Translation_reply                                      99919
 #define Rexx_Error_Translation_invalid_line                               99921
 #define Rexx_Error_Translation_requires                                   99922
-#define Rexx_Error_Translation_reply_interpret                            99924
 #define Rexx_Error_Translation_forward_interpret                          99923
+#define Rexx_Error_Translation_reply_interpret                            99924
 #define Rexx_Error_Translation_invalid_attribute                          99925
 #define Rexx_Error_Translation_class_external_bad_parameters              99926
 #define Rexx_Error_Translation_bad_metaclass                              99927

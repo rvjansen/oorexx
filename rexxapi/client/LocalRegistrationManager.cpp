@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2017 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -385,9 +385,13 @@ RexxReturnCode LocalRegistrationManager::mapReturnResult(ServiceMessage &m)
         case CALLBACK_NOT_FOUND:
             return RXSUBCOM_NOTREG;
 
+        case DUPLICATE_REGISTRATION:
+            return RXSUBCOM_DUP;
+
         case DROP_NOT_AUTHORIZED:
             return RXSUBCOM_NOCANDROP;
 
+        // CALLBACK_EXISTS is a good result and falls through
         default:
             return RXSUBCOM_OK;
     }

@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -56,8 +56,13 @@
  */
 typedef enum
 {
-    NovalueError,
+    NovalueSyntax,
     NoProlog,
+    ErrorSyntax,
+    FailureSyntax,
+    LostdigitsSyntax,
+    NostringSyntax,
+    NotreadySyntax,
 } PackageFlags;
 
 
@@ -88,9 +93,24 @@ class PackageSetting
     inline bool   isDebug() { return traceSettings.isDebug(); }
     inline const  TraceSetting &getTraceSetting() const { return traceSettings; }
     inline RexxString *getTrace() { return traceSettings.toString(); }
-    inline bool   isNovalueErrorEnabled() { return packageOptions[NovalueError]; }
-    inline void   enableNovalueError() { packageOptions[NovalueError] = true; }
-    inline void   disableNovalueError() { packageOptions[NovalueError] = false; }
+    inline bool   isErrorSyntaxEnabled() { return packageOptions[ErrorSyntax]; }
+    inline void   enableErrorSyntax() { packageOptions[ErrorSyntax] = true; }
+    inline void   disableErrorSyntax() { packageOptions[ErrorSyntax] = false; }
+    inline bool   isFailureSyntaxEnabled() { return packageOptions[FailureSyntax]; }
+    inline void   enableFailureSyntax() { packageOptions[FailureSyntax] = true; }
+    inline void   disableFailureSyntax() { packageOptions[FailureSyntax] = false; }
+    inline bool   isLostdigitsSyntaxEnabled() { return packageOptions[LostdigitsSyntax]; }
+    inline void   enableLostdigitsSyntax() { packageOptions[LostdigitsSyntax] = true; }
+    inline void   disableLostdigitsSyntax() { packageOptions[LostdigitsSyntax] = false; }
+    inline bool   isNostringSyntaxEnabled() { return packageOptions[NostringSyntax]; }
+    inline void   enableNostringSyntax() { packageOptions[NostringSyntax] = true; }
+    inline void   disableNostringSyntax() { packageOptions[NostringSyntax] = false; }
+    inline bool   isNotreadySyntaxEnabled() { return packageOptions[NotreadySyntax]; }
+    inline void   enableNotreadySyntax() { packageOptions[NotreadySyntax] = true; }
+    inline void   disableNotreadySyntax() { packageOptions[NotreadySyntax] = false; }
+    inline bool   isNovalueSyntaxEnabled() { return packageOptions[NovalueSyntax]; }
+    inline void   enableNovalueSyntax() { packageOptions[NovalueSyntax] = true; }
+    inline void   disableNovalueSyntax() { packageOptions[NovalueSyntax] = false; }
     inline void   enableProlog() { packageOptions[NoProlog] = false; }
     inline void   disableProlog() { packageOptions[NoProlog] = true; }
     inline bool   isPrologEnabled() { return !packageOptions[NoProlog]; }

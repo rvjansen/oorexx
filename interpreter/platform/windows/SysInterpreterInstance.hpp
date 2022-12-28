@@ -1,11 +1,11 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -48,9 +48,15 @@
 class InterpreterInstance;
 class RexxActivation;
 
+/**
+ * A class type that can be embedded within an InterpreterInstance
+ * object to hold platform-specific state for an instance.
+ */
 class SysInterpreterInstance
 {
 public:
+    // this class is embedded within an InterpreterInstance class, so
+    // these are not virtual
     void live(size_t);
     void liveGeneral(MarkReason);
 
@@ -75,22 +81,15 @@ public:
 
     inline void addPath(const char *p)
     {
-        if (p != NULL)
+        // add path only if not an empty string
+        if (p != NULL && *p != '\0')
         {
+            path.appendPathSeparator();
             path += p;
-            checkPathSeparator();
         }
     }
 
-    inline void checkPathSeparator()
-    {
-         if (!path.endsWith(';'))
-         {
-             path += ";";
-         }
-    }
-
-    FileNameBuffer path;        // the constructed path
+    FileNameBuffer path;  // the constructed path
 };
 
 

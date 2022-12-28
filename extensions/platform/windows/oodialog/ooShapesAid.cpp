@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -124,7 +124,7 @@ __declspec(dllexport) bool rxSetRect(PORXRECT rect, long x, long y, long x2, lon
 
 __declspec(dllexport) bool rxPtInRect(PORXRECT r, PORXPOINT pt)
 {
-    if ( pt->x > r->top && pt->x < r->bottom && pt->y > r->left && pt->y < r->top )
+    if ( pt->x > r->left && pt->x < r->right && pt->y > r->top && pt->y < r->bottom )
     {
         return true;
     }

@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -127,7 +127,7 @@ void NativeCode::flatten(Envelope *envelope)
  *
  * @return Either the same object, or a new copy of the code object.
  */
-BaseCode *NativeCode::setPackageObject(PackageClass *s)
+BaseCode* NativeCode::setPackageObject(PackageClass *s)
 {
     if (package == OREF_NULL)
     {
@@ -152,7 +152,7 @@ BaseCode *NativeCode::setPackageObject(PackageClass *s)
  *
  * @return The source security manager.
  */
-SecurityManager *NativeCode::getSecurityManager()
+SecurityManager* NativeCode::getSecurityManager()
 {
     if (package != OREF_NULL)
     {
@@ -169,7 +169,7 @@ SecurityManager *NativeCode::getSecurityManager()
  *
  * @return A block of storage for creating this object.
  */
-void * NativeMethod::operator new(size_t size)
+void* NativeMethod::operator new(size_t size)
 {
     return new_object(size, T_NativeMethod);
 }

@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -52,19 +52,11 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <algorithm>
-#ifdef AIX
-#include <sys/sched.h>
-#include <time.h>
-#endif
-
-#if defined(OPSYS_SUN) || defined(__HAIKU__)
-#include <sched.h>
-#endif
-
 #include <errno.h>
 
 #include "SysSemaphore.hpp"
 
+// on Darwin MacOS 10.14 we have no pthread_mutex_timedlock
 #ifndef HAVE_PTHREAD_MUTEX_TIMEDLOCK
 
 // we test every 10 milliseconds
@@ -95,7 +87,7 @@ bool checkTimeOut(const struct timespec *ts, long &nextInterval)
     if (ts->tv_sec == currentTime.tv_sec)
     {
         // calculate unconditionally, we use the sign to then determine if this was a time out
-        nextInterval = ts->tv_sec - currentTime.tv_sec;
+        nextInterval = ts->tv_nsec - currentTime.tv_nsec;
         if (nextInterval < 0)
         {
             return true;      // a negative result is a timeout
@@ -179,65 +171,44 @@ SysSemaphore::SysSemaphore(bool createSem)
  */
 void SysSemaphore::create()
 {
-    int iRC = 0;
-
-    if (!created)
+    // don't create this multiple times
+    if (created)
     {
-        // Clear mutex/cond prior to init
-        //  this->semMutex = NULL;
-        //  this->semCond = NULL;
-
-        /* The original settings for pthread_mutexattr_settype() were:
-           AIX  : PTHREAD_MUTEX_RECURSIVE
-           SUNOS: PTHREAD_MUTEX_ERRORCHECK
-           LINUX: PTHREAD_MUTEX_RECURSIVE_NP
-        */
-
-#if defined( HAVE_PTHREAD_MUTEXATTR_SETTYPE )
-        pthread_mutexattr_t mutexattr;
-
-        iRC = pthread_mutexattr_init(&mutexattr);
-        if (iRC == 0)
-        {
-#if defined( HAVE_PTHREAD_MUTEX_RECURSIVE ) /* Linux most likely */
-            iRC = pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_RECURSIVE);
-#elif defined( HAVE_PTHREAD_MUTEX_ERRORCHECK )
-            iRC = pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_ERRORCHECK);
-            // no valid mutex errors found, likely a config.h problem
-#else
-#error Configuration error for pthread semaphores.  Check the defines in config.h
-#endif
-        }
-        if (iRC == 0)
-        {
-            iRC = pthread_mutex_init(&(this->semMutex), &mutexattr);
-        }
-        if (iRC == 0)
-        {
-            iRC = pthread_mutexattr_destroy(&mutexattr); /* It does not affect       */
-        }
-        if (iRC == 0)                                 /* mutexes created with it  */
-        {
-            iRC = pthread_cond_init(&(this->semCond), NULL);
-        }
-#else
-        iRC = pthread_mutex_init(&(this->semMutex), NULL);
-        if (iRC == 0)
-        {
-            iRC = pthread_cond_init(&(this->semCond), NULL);
-        }
-#endif
-        if (iRC != 0)
-        {
-            fprintf(stderr, " *** ERROR: At RexxSemaphore(), pthread_mutex_init - RC = %d !\n", iRC);
-            if (iRC == EINVAL)
-            {
-                fprintf(stderr, " *** ERROR: Application was not built thread safe!\n");
-            }
-        }
-        this->postedCount = 0;
-        created = true;
+        return;
     }
+    int rc = 0;
+
+    pthread_mutexattr_t mutexattr;
+
+    rc = pthread_mutexattr_init(&mutexattr);
+    if (rc == 0)
+    {
+        // our mutexes must allow recursive (multiple) locks
+        rc = pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_RECURSIVE);
+    }
+    if (rc == 0)
+    {
+        rc = pthread_mutex_init(&semMutex, &mutexattr);
+    }
+    if (rc == 0)
+    {
+        // destroying our mutexattr doesn't affect mutexes created with it
+        rc = pthread_mutexattr_destroy(&mutexattr);
+    }
+    if (rc == 0)
+    {
+        rc = pthread_cond_init(&semCond, NULL);
+    }
+    if (rc != 0)
+    {
+        fprintf(stderr, "*** Internal error in SysSemaphore::create: pthread_mutex rc=%d\n", rc);
+        if (rc == EINVAL)
+        {
+            fprintf(stderr, "*** Internal error in SysSemaphore::create: not built thread-safe\n");
+        }
+    }
+    postedCount = 0;
+    created = true;
 }
 
 /**
@@ -247,8 +218,8 @@ void SysSemaphore::close()
 {
     if (created)
     {
-        pthread_cond_destroy(&(this->semCond));
-        pthread_mutex_destroy(&(this->semMutex));
+        pthread_cond_destroy(&semCond);
+        pthread_mutex_destroy(&semMutex);
         created = false;
     }
 }
@@ -261,10 +232,10 @@ void SysSemaphore::post()
 {
     int rc;
 
-    rc = pthread_mutex_lock(&(this->semMutex));      //Lock the semaphores Mutex
-    postedCount++;                                   //Increment post count
-    rc  = pthread_cond_broadcast(&(this->semCond));  //allows any threads waiting to run
-    rc = pthread_mutex_unlock(&(this->semMutex));    // Unlock access to Semaphore mutex
+    rc = pthread_mutex_lock(&semMutex);       // lock the semaphores mutex
+    postedCount++;                            // increment post count
+    rc = pthread_cond_broadcast(&semCond);    // allows any threads waiting to run
+    rc = pthread_mutex_unlock(&semMutex);     // unlock access to semaphore mutex
 }
 
 
@@ -274,21 +245,13 @@ void SysSemaphore::post()
 void SysSemaphore::wait()
 {
     int rc;
-    int schedpolicy, i_prio;
-    struct sched_param schedparam;
 
-    pthread_getschedparam(pthread_self(), &schedpolicy, &schedparam);
-    i_prio = schedparam.sched_priority;
-    schedparam.sched_priority = 100;
-    pthread_setschedparam(pthread_self(), SCHED_OTHER, &schedparam);
-    rc = pthread_mutex_lock(&(this->semMutex));      // Lock access to semaphore
-    if (this->postedCount == 0)                      // Has it been posted?
+    rc = pthread_mutex_lock(&semMutex);       // lock access to semaphore
+    if (this->postedCount == 0)               // has it been posted?
     {
-        rc = pthread_cond_wait(&(this->semCond), &(this->semMutex)); // Nope, then wait on it.
+        rc = pthread_cond_wait(&semCond, &semMutex); // nope, then wait on it
     }
-    pthread_mutex_unlock(&(this->semMutex));    // Release mutex lock
-    schedparam.sched_priority = i_prio;
-    pthread_setschedparam(pthread_self(), SCHED_OTHER, &schedparam);
+    rc = pthread_mutex_unlock(&semMutex);     // release mutex lock
 }
 
 
@@ -331,12 +294,12 @@ bool SysSemaphore::wait(uint32_t t)           // takes a timeout in msecs
     int result = 0;
     createTimeOut(t, ts);
 
-    pthread_mutex_lock(&(this->semMutex));    // Lock access to semaphore
+    pthread_mutex_lock(&semMutex);            // lock access to semaphore
     while (result == 0 && !this->postedCount) // Has it been posted? Spurious wakeups may occur
     {                                         // wait with timeout
-        result = pthread_cond_timedwait(&(this->semCond), &(this->semMutex), &ts);
+        result = pthread_cond_timedwait(&semCond, &semMutex, &ts);
     }
-    pthread_mutex_unlock(&(this->semMutex));    // Release mutex lock
+    pthread_mutex_unlock(&semMutex);          // release mutex lock
     // a false return means this timed out
     return result != ETIMEDOUT;
 }
@@ -346,9 +309,9 @@ bool SysSemaphore::wait(uint32_t t)           // takes a timeout in msecs
  */
 void SysSemaphore::reset()
 {
-    pthread_mutex_lock(&(this->semMutex));      // Lock access to semaphore
-    this->postedCount = 0;                      // Clear value
-    pthread_mutex_unlock(&(this->semMutex));    // unlock access to semaphore
+    pthread_mutex_lock(&semMutex);            // lock access to semaphore
+    this->postedCount = 0;                    // clear value
+    pthread_mutex_unlock(&semMutex);          // unlock access to semaphore
 }
 
 /* ********************************************************************** */
@@ -385,40 +348,32 @@ void SysMutex::create(bool critical)
     {
         return;
     }
-    int iRC = 0;
+    int rc = 0;
 
-/* The original settings for pthread_mutexattr_settype() were:
-   SUNOS: PTHREAD_MUTEX_ERRORCHECK
-   LINUX: PTHREAD_MUTEX_RECURSIVE_NP
-*/
-#if defined( HAVE_PTHREAD_MUTEXATTR_SETTYPE )
     pthread_mutexattr_t mutexattr;
 
-    iRC = pthread_mutexattr_init(&mutexattr);
-    if (iRC == 0)
+    rc = pthread_mutexattr_init(&mutexattr);
+    if (rc == 0)
     {
-#if defined( HAVE_PTHREAD_MUTEX_RECURSIVE ) /* Linux most likely */
-        iRC = pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_RECURSIVE);
-#elif defined( HAVE_PTHREAD_MUTEX_ERRORCHECK )
-        iRC = pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_ERRORCHECK);
-#else
-        fprintf(stderr, " *** ERROR: Unknown 2nd argument to pthread_mutexattr_settype()!\n");
-#endif
+        // our mutexes must allow recursive (multiple) locks
+        rc = pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_RECURSIVE);
     }
-    if (iRC == 0)
+    if (rc == 0)
     {
-        iRC = pthread_mutex_init(&(this->mutexMutex), &mutexattr);
+        rc = pthread_mutex_init(&mutexMutex, &mutexattr);
     }
-    if (iRC == 0)
+    if (rc == 0)
     {
-        iRC = pthread_mutexattr_destroy(&mutexattr); /* It does not affect       */
+        // destroying our mutexattr doesn't affect mutexes created with it
+        rc = pthread_mutexattr_destroy(&mutexattr);
     }
-#else                                             /* mutexes created with it  */
-    iRC = pthread_mutex_init(&(this->mutexMutex), NULL);
-#endif
-    if (iRC != 0)
+    if (rc != 0)
     {
-        fprintf(stderr, " *** ERROR: At RexxMutex(), pthread_mutex_init - RC = %d !\n", iRC);
+        fprintf(stderr, "*** Internal error in SysMutex::create: pthread_mutex rc=%d\n", rc);
+        if (rc == EINVAL)
+        {
+            fprintf(stderr, "*** Internal error in SysMutex::create: not built thread-safe\n");
+        }
     }
 
     created = true;
@@ -452,7 +407,7 @@ void SysMutex::close()
 {
     if (created)
     {
-        pthread_mutex_destroy(&(this->mutexMutex));
+        pthread_mutex_destroy(&mutexMutex);
         created = false;
     }
 }

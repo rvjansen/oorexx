@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -314,7 +314,7 @@ static uint32_t getImageFlagsArg(RexxMethodContext *context, RexxObjectPtr _flag
 
                 token = strtok(NULL, " ");
             }
-            LocalFree(dup);
+            free(dup);
         }
 
         if ( flags != OOD_NO_VALUE )
@@ -467,7 +467,7 @@ static uint32_t getImageListCreateFlagsArg(RexxMethodContext *context, RexxObjec
 
                 token = strtok(NULL, " ");
             }
-            LocalFree(dup);
+            free(dup);
         }
     }
     return flags;
@@ -516,7 +516,7 @@ uint32_t keyword2ild(RexxMethodContext *c, CSTRING flags, size_t argPos)
 
             token = strtok(NULL, " ");
         }
-        LocalFree(dup);
+        free(dup);
     }
 
     return val;

@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -45,6 +45,12 @@
 class Utilities
 {
 public:
+    static inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
+    static inline bool isAlpha(char c) { return isUpper(c) || isLower(c); }
+    static inline bool isUpper(char c) { return c >= 'A' && c <= 'Z'; }
+    static inline bool isLower(char c) { return c >= 'a' && c <= 'z'; }
+    static inline char toUpper(char c) { return isLower(c) ? c & ~0x20 : c; }
+    static inline char toLower(char c) { return isUpper(c) ? c | 0x20 : c; }
     static int strCaselessCompare(const char *opt1, const char *opt2);
     static int memicmp(const void *opt1, const void *opt2, size_t len);
     static void strupper(char *str);

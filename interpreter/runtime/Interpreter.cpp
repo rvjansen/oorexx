@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -71,7 +71,6 @@ RexxObject *Interpreter::localServer = OREF_NULL;
 
 // the interpreter active state flag
 bool Interpreter::active = false;
-
 
 // exit return codes.
 const int RC_OK         = 0;
@@ -225,23 +224,32 @@ bool Interpreter::terminateInterpreter()
             return false;
         }
 
-        {
-            try
-            {
-                // this may seem funny, but we need to create an instance
-                // to shut down so that the package manager can unload
-                // the libraries (it needs to pass a RexxThreadContext
-                // pointer out to package unloaders, if they are defined)
-                InstanceBlock instance;
-                // run whatever uninits we can before we start releasing the libraries
-                memoryObject.lastChanceUninit();
+    }
 
-                PackageManager::unload();
-            } catch (ActivityException)
-            {
-                // we're shutting down, so ignore any failures while processing this
-            }
-        }
+    // the resource lock needs to be released here because unloading packages
+    // will require the kernel lock, which can never be requested while holding
+    // the resource lock
+    try
+    {
+        // this may seem funny, but we need to create an instance
+        // to shut down so that the package manager can unload
+        // the libraries (it needs to pass a RexxThreadContext
+        // pointer out to package unloaders, if they are defined)
+        InstanceBlock instance;
+        // run whatever uninits we can before we start releasing the libraries
+        memoryObject.lastChanceUninit();
+
+        PackageManager::unload();
+    }
+    catch (ActivityException)
+    {
+        // we're shutting down, so ignore any failures while processing this
+    }
+
+
+    {
+        ResourceSection lock;   // Now that we've released the kernel lock, we need to reacquire the resource lock
+
         // perform system-specific cleanup
         SystemInterpreter::terminateInterpreter();
 
@@ -332,7 +340,7 @@ InterpreterInstance *Interpreter::createInterpreterInstance(RexxOption *options)
     // stack
     Activity *rootActivity = ActivityManager::getRootActivity();
     // ok, we have an active activity here, so now we can allocate a new instance and bootstrap everything.
-    InterpreterInstance *instance = new InterpreterInstance();
+    Protected<InterpreterInstance> instance = new InterpreterInstance();
 
     {
         ResourceSection lock;
@@ -363,6 +371,21 @@ bool Interpreter::terminateInterpreterInstance(InterpreterInstance *instance)
 
     interpreterInstances->removeItem(instance);
     return true;
+}
+
+
+/**
+ * Verify that an instance pointer is if fact a valid, active instance.
+ *
+ * @param instance The instance to check
+ *
+ * @return true if this is in our list, false otherwise.
+ */
+bool Interpreter::isInstanceActive(InterpreterInstance *instance)
+{
+    ResourceSection lock;
+
+    return interpreterInstances->hasItem(instance);
 }
 
 
@@ -478,27 +501,25 @@ InstanceBlock::~InstanceBlock()
  */
 void Interpreter::decodeConditionData(DirectoryClass *conditionObj, RexxCondition *condData)
 {
-    using namespace GlobalNames;
-
     memset(condData, 0, sizeof(RexxCondition));
-    condData->code = messageNumber((RexxString *)conditionObj->get(CODE));
+    condData->code = messageNumber((RexxString *)conditionObj->get(GlobalNames::CODE));
     // just return the major part
-    condData->rc = messageNumber((RexxString *)conditionObj->get(RC))/1000;
-    condData->conditionName = (RexxStringObject)conditionObj->get(CONDITION);
+    condData->rc = messageNumber((RexxString *)conditionObj->get(GlobalNames::RC))/1000;
+    condData->conditionName = (RexxStringObject)conditionObj->get(GlobalNames::CONDITION);
 
-    RexxObject *temp = (RexxObject *)conditionObj->get(MESSAGE);
+    RexxObject *temp = (RexxObject *)conditionObj->get(GlobalNames::MESSAGE);
     if (temp != OREF_NULL)
     {
         condData->message = (RexxStringObject)temp;
     }
 
-    temp = (RexxObject *)conditionObj->get(ERRORTEXT);
+    temp = (RexxObject *)conditionObj->get(GlobalNames::ERRORTEXT);
     if (temp != OREF_NULL)
     {
         condData->errortext = (RexxStringObject)temp;
     }
 
-    temp = (RexxObject *)conditionObj->get(DESCRIPTION);
+    temp = (RexxObject *)conditionObj->get(GlobalNames::DESCRIPTION);
     if (temp != OREF_NULL)
     {
         condData->description = (RexxStringObject)temp;
@@ -506,7 +527,7 @@ void Interpreter::decodeConditionData(DirectoryClass *conditionObj, RexxConditio
 
     // this could be raised by a termination exit, so there might not be
     // position information available
-    temp = (RexxObject *)conditionObj->get(POSITION);
+    temp = (RexxObject *)conditionObj->get(GlobalNames::POSITION);
     if (temp != OREF_NULL)
     {
         condData->position = ((RexxInteger *)temp)->wholeNumber();
@@ -516,13 +537,13 @@ void Interpreter::decodeConditionData(DirectoryClass *conditionObj, RexxConditio
         condData->position = 0;
     }
 
-    temp = (RexxObject *)conditionObj->get(PROGRAM);
+    temp = (RexxObject *)conditionObj->get(GlobalNames::PROGRAM);
     if (temp != OREF_NULL)
     {
         condData->program = (RexxStringObject)temp;
     }
 
-    temp = (RexxObject *)conditionObj->get(ADDITIONAL);
+    temp = (RexxObject *)conditionObj->get(GlobalNames::ADDITIONAL);
     if (temp != OREF_NULL)
     {
         condData->additional = (RexxArrayObject)temp;

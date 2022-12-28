@@ -1,0 +1,92 @@
+#! /usr/bin/env bash
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# the script (build_macOS_dmg.sh.in) to be configured
+
+# unhash to enable tracing
+# set -x
+
+# accomodate for fileicon being in different places
+FILEICON="$(which fileicon)"
+
+if  [ "${FILEICON}".  == "". ] ; then
+  if    test -f "/usr/local/bin/fileicon" ; then
+    FILEICON="/usr/local/bin/fileicon"
+  elif  test -f "/opt/homebrew/bin/fileicon" ; then
+    FILEICON="/opt/homebrew/bin/fileicon"
+  else
+    echo "unable to attach icons to files/directories"
+  fi
+fi
+
+# the data passed from CMAKE
+cpack_package_name="@CPACK_PACKAGE_NAME@"
+
+cpack_package_file_name="@CPACK_PACKAGE_FILE_NAME@"
+
+orx_major="@ORX_MAJOR@"
+
+cmake_binary_dir="@CMAKE_BINARY_DIR@"
+
+cmake_install_prefix="@CMAKE_INSTALL_PREFIX@"
+
+cmake_source_dir="@CMAKE_SOURCE_DIR@"
+
+# the rest of the script using the preset variables
+
+# Rebuild everything from scratch everytime, erase build dir or write errors will occur
+rm -dfr $cmake_binary_dir/temp_dmg_dir
+mkdir $cmake_binary_dir/temp_dmg_dir
+
+cp -R $cmake_install_prefix $cmake_binary_dir/temp_dmg_dir/$cpack_package_name$orx_major
+
+cp $cmake_source_dir/platform/unix/macos/install/Readme_ooRexx.txt $cmake_binary_dir/temp_dmg_dir/Readme_ooRexx.txt
+
+cp $cmake_source_dir/platform/unix/macos/install/Readme_ooRexx.txt $cmake_binary_dir/temp_dmg_dir/$cpack_package_name$orx_major/Readme_ooRexx.txt
+
+cp $cmake_source_dir/platform/unix/macos/install/Readme_ooRexx_USB.txt $cmake_binary_dir/temp_dmg_dir/Readme_ooRexx_USB.txt
+
+cp $cmake_source_dir/platform/unix/macos/install/Readme_ooRexx_USB.txt $cmake_binary_dir/temp_dmg_dir/$cpack_package_name$orx_major/Readme_ooRexx_USB.txt
+
+cp $cmake_source_dir/CPLv1.0.txt $cmake_binary_dir/temp_dmg_dir/CPLv1.0.txt
+
+cp $cmake_source_dir/CPLv1.0.txt $cmake_binary_dir/temp_dmg_dir/$cpack_package_name$orx_major/CPLv1.0.txt
+
+ln -sfvh /Applications $cmake_binary_dir/temp_dmg_dir
+
+# fileicon is open source, install with brew install fileicon if missing
+if  [ "${FILEICON}".  != "". ] ; then
+  ${FILEICON} set $cmake_binary_dir/temp_dmg_dir/$cpack_package_name$orx_major $cmake_source_dir/platform/unix/macos/install/oorexx.png
+fi
+
+# Make a documentation directory to go with the build
+mkdir -p $cmake_binary_dir/temp_dmg_dir/Documentation
+
+# use cURL to download the latest documentation (this takes some time)
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rexxref.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/rexxref.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rexxapi.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/rexxapi.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rexxpg.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/rexxpg.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rexxextensions.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/rexxextensions.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/unixextensions.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/unixextensions.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rxsock.pdf  > $cmake_binary_dir/temp_dmg_dir/Documentation/rxsock.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rxmath.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/rxmath.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rxftp.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/rxftp.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/rexxgtk.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/rexxgtk.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/orxncurses.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/orxncurses.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/readme.pdf > $cmake_binary_dir/temp_dmg_dir/Documentation/readme.pdf
+curl -L --insecure https://sourceforge.net/projects/oorexx/files/oorexx-docs/5.0.0beta/ReadMe.txt > $cmake_binary_dir/temp_dmg_dir/Documentation/ReadMe.txt
+
+# Put a copy of the documentation also inside the "App"
+cp -R $cmake_binary_dir/temp_dmg_dir/Documentation $cmake_binary_dir/temp_dmg_dir/$cpack_package_name$orx_major/Documentation
+
+# Create the dmg locally, will look something like ooRexx-5.0.0-12160.macOS.x86_64.dmg
+rm -f $cmake_binary_dir/$cpack_package_name$orx_major.dmg
+
+hdiutil create -fs HFS+ -volname $cpack_package_name$orx_major -srcfolder $cmake_binary_dir/temp_dmg_dir $cmake_binary_dir/$cpack_package_name$orx_major.dmg
+
+if  [ "${FILEICON}".  != "". ] ; then
+  ${FILEICON} set $cmake_binary_dir/$cpack_package_name$orx_major.dmg $cmake_source_dir/platform/unix/macos/install/oorexx.png
+fi
+
+cp $cmake_binary_dir/$cpack_package_name$orx_major.dmg $cmake_binary_dir/$cpack_package_file_name.dmg
+
+rm -f $cmake_binary_dir/$cpack_package_name$orx_major.dmg

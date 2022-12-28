@@ -7,7 +7,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -100,8 +100,10 @@
 #define Error_System_service_msg                                     48
 #define Error_Interpretation_msg                                     49
 #define Error_Invalid_argument_msg                                   88
+#define Error_Variable_expected_msg                                  89
 #define Error_External_name_not_found_msg                            90
 #define Error_No_result_object_msg                                   91
+#define Error_OLE_Error_msg                                          92
 #define Error_Incorrect_method_msg                                   93
 #define Error_No_method_msg                                          97
 #define Error_Execution_msg                                          98
@@ -138,7 +140,6 @@
 #define Error_REXXC_SynCheckInfo_msg                                 130
 #define Error_RXQUE_syntax_msg                                       131
 #define Error_RXQUE_memfail_msg                                      132
-#define Error_REXXC_wrongNrArg_unix_msg                              133
 #define Error_Program_unreadable_name_msg                            200
 #define Error_Program_interrupted_condition_msg                      201
 #define Error_Unmatched_quote_comment_msg                            202
@@ -260,9 +261,6 @@
 #define Error_Invalid_leave_iteratevar_msg                           318
 #define Error_Environment_name_name_msg                              319
 #define Error_Name_too_long_name_msg                                 320
-#define Error_Name_too_long_string_msg                               321
-#define Error_Name_too_long_hex_msg                                  322
-#define Error_Name_too_long_bin_msg                                  323
 #define Error_Invalid_variable_assign_msg                            324
 #define Error_Invalid_variable_number_msg                            325
 #define Error_Invalid_variable_period_msg                            326
@@ -383,7 +381,6 @@
 #define Error_Incorrect_method_symbol_msg                            442
 #define Error_Incorrect_method_list_msg                              443
 #define Error_Incorrect_method_option_msg                            444
-#define Error_Incorrect_method_string_msg                            445
 #define Error_Incorrect_method_methodname_msg                        446
 #define Error_Incorrect_method_index_msg                             447
 #define Error_Incorrect_method_array_msg                             448
@@ -415,6 +412,7 @@
 #define Error_Incorrect_method_noclass_msg                           474
 #define Error_Incorrect_method_nomatch_msg                           475
 #define Error_No_method_name_msg                                     476
+#define Error_Program_unreadable_invalid_encoding_msg                477
 #define Error_Execution_nodouble_msg                                 478
 #define Error_Execution_library_msg                                  479
 #define Error_Execution_terminate_msg                                480
@@ -432,6 +430,11 @@
 #define Error_Execution_raise_object_msg                             492
 #define Error_Execution_propagate_msg                                493
 #define Error_Execution_nomethod_msg                                 494
+#define Error_Execution_error_syntax_msg                             495
+#define Error_Execution_failure_syntax_msg                           496
+#define Error_Execution_lostdigits_syntax_msg                        497
+#define Error_Execution_nostring_syntax_msg                          498
+#define Error_Execution_notready_syntax_msg                          499
 #define Error_Execution_reply_msg                                    500
 #define Error_Execution_reply_return_msg                             501
 #define Error_Execution_reply_exit_msg                               502
@@ -493,7 +496,6 @@
 #define Error_Invalid_expression_forward_class_msg                   558
 #define Error_Execution_forward_msg                                  559
 #define Error_Program_unreadable_version_msg                         560
-#define Error_Program_unreadable_invalid_encoding_msg                560
 #define Error_Translation_reply_interpret_msg                        561
 #define Error_Translation_forward_interpret_msg                      562
 #define Error_Logical_value_authorization_msg                        563
@@ -509,7 +511,6 @@
 #define Error_Incorrect_call_parm_wrong_sep_msg                      586
 #define Error_Incorrect_call_format_incomp_sep_msg                   587
 #define Error_Incorrect_call_queue_no_char_msg                       588
-#define Error_OLE_Error_msg                                          589
 #define Error_Unknown_OLE_Error_msg                                  590
 #define Error_Variant2Rexx_msg                                       591
 #define Error_Rexx2Variant_msg                                       592
@@ -522,7 +523,6 @@
 #define Error_Parameter_Omitted_msg                                  599
 #define Error_No_OLE_instance_msg                                    600
 #define Error_Client_Disconnected_From_Server_msg                    601
-#define Error_Program_not_tokenized_msg                              602
 #define Error_Incorrect_call_read_from_writeonly_msg                 603
 #define Error_Incorrect_call_write_to_readonly_msg                   604
 #define Error_Incorrect_method_invbase64_msg                         611
@@ -566,7 +566,7 @@
 #define Error_Unmatched_quote_user_defined_msg                       649
 #define Error_Invalid_whole_number_method_msg                        650
 #define Error_Logical_value_property_msg                             651
-#define Error_Variable_expected_msg                                  652
+#define Error_Incorrect_call_noarray_nostem_msg                      652
 #define Error_Variable_expected_USE_msg                              653
 #define Error_Variable_expected_PARSE_msg                            654
 #define Error_Symbol_expected_LABEL_msg                              655
@@ -752,6 +752,7 @@
 #define Error_Invalid_argument_date_template_msg                     835
 #define Error_Invalid_argument_bad_date_msg                          836
 #define Error_Incorrect_method_request_type_msg                      837
+#define Error_Execution_circular_requires_msg                        838
 
 
 #endif

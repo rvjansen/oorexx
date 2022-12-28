@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -74,8 +74,8 @@ SysFile::SysFile()
     filePointer = 0;
     ungetchar = -1;
     writeBuffered = false;     // no pending write operations
+    fileSize = -1;             // no retrieved file size yet
 }
-
 
 /**
  * Opens a file.  This opens the file for both lowlevel I/O
@@ -85,8 +85,6 @@ SysFile::SysFile()
  * @param openFlags  The open flags.  This are the same flags used on the _sopen()
  *                   function.
  * @param openMode   Open mode.  Same flag values as _sopen().
- * @param fdopenMode fdopenMode character string.  Same as values use for the
- *                   fdopen() function.
  * @param shareMode  The sharing mode.  Same as used by the _sopen() library
  *                   function.
  *
@@ -112,6 +110,7 @@ bool SysFile::open(const char *name, int openFlags, int openMode, int shareMode)
     // save a copy of the name
     filename = strdup(name);
     ungetchar = -1;            // -1 indicates no char
+    fileSize = -1;               // make sure we don't have a file size from a previous open
 
     // is this append mode?
     if ((flags & RX_O_APPEND) != 0)
@@ -132,7 +131,6 @@ bool SysFile::open(const char *name, int openFlags, int openMode, int shareMode)
  * Open a stream using a provided handle value.
  *
  * @param handle     The source stream handle.
- * @param fdopenMode The fdopen() mode flags for the stream.
  *
  * @return true if the file opened ok, false otherwise.
  */
@@ -143,6 +141,7 @@ bool SysFile::open(int handle)
     fileHandle = handle;
     ungetchar = -1;            // -1 indicates no char
     getStreamTypeInfo();
+
     // set the default buffer size (and allocate the buffer)
     setBuffering(true, 0);
     return true;
@@ -211,6 +210,7 @@ bool SysFile::close()
     {
         return true;
     }
+
     // if we're buffering, make sure the buffers are flushed
     if (buffered)
     {
@@ -239,6 +239,7 @@ bool SysFile::close()
             return false;
         }
     }
+
     // always clear this on a close
     fileHandle = -1;
 
@@ -258,7 +259,7 @@ bool SysFile::flush()
         if (writeBuffered && bufferPosition > 0)
         {
             // write this out...but if it fails, we need to bail
-            int written = writeData(buffer, (size_t)bufferPosition);
+            ssize_t written = writeData(buffer, bufferPosition);
             // did we have an error?
             if (written <= 0)
             {
@@ -393,43 +394,44 @@ bool SysFile::read(char *buf, size_t len, size_t &bytesRead)
     return true;
 }
 
-
 /**
  * Wrapper around _write to handle block size issues with
- * device streams.
+ * device streams and _write itself.
  *
  * @param data   The data to write.
  * @param length The data length.
  *
- * @return The number of bytes written
+ * @return The number of bytes written, or -1 on error
  */
-int SysFile::writeData(const char *data, size_t length)
+ssize_t SysFile::writeData(const char *data, size_t length)
 {
-    // normal files seem to handle large writes ok, but for devices, we
-    // need to write this in blocks
-    if (!device || length < BLOCK_THRESHOLD)
+    // anytime we write data to the stream, we invalidate our cached
+    // file size because it's likely no longer valid
+    fileSize = -1;
+
+    // _write can handle chunks of INT_MAX at most because of its
+    // int return (on Windows int is 32-bit even on 64-bit systems)
+    // for devices, we write this in blocks of BLOCK_THRESHOLD size
+    size_t blocksize = device ? BLOCK_THRESHOLD : INT_MAX;
+
+    // Windows _write isn't expected to successfully return with less
+    // bytes written than requested, but we always loop until all data
+    // has been written or _write fails.
+    size_t bytesWritten = 0;
+    while (length > 0)
     {
-        return _write(fileHandle, data, (unsigned int)length);
-    }
-    else
-    {
-        // rats, need to write this out in segments
-        int bytesWritten = 0;
-        while (length > 0)
+        size_t segmentSize = length > blocksize ? blocksize : length;
+        int justWritten = _write(fileHandle, data, (unsigned int)segmentSize);
+        // write error?  bail out
+        if (justWritten <= 0)
         {
-            size_t segmentSize = length > BLOCK_THRESHOLD ? BLOCK_THRESHOLD : length;
-            int justWritten = _write(fileHandle, data, (unsigned int)segmentSize);
-            // write error?  Return whatever we've written
-            if (justWritten <= 0)
-            {
-                return bytesWritten;
-            }
-            length -= justWritten;
-            bytesWritten += justWritten;
-            data += justWritten;
+            return -1;
         }
-        return bytesWritten;
+        length -= justWritten;
+        bytesWritten += justWritten;
+        data += justWritten;
     }
+    return bytesWritten;
 }
 
 
@@ -450,6 +452,11 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
     {
         return true;
     }
+
+    // anytime we write data to the stream, we invalidate our cached
+    // file size because it's likely no longer valid
+    fileSize = -1;
+
     // are we buffering?
     if (buffered)
     {
@@ -473,7 +480,7 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
             // flush an existing data from the buffer
             flush();
             // write this out directly
-            int written = writeData(data, len);
+            ssize_t written = writeData(data, len);
             // oh, oh...got a problem
             if (written <= 0)
             {
@@ -525,7 +532,7 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
                 }
             }
             // write the data
-            int written = writeData(data, len);
+            ssize_t written = writeData(data, len);
             if (written <= 0)
             {
                 // return error status if there was a problem
@@ -538,7 +545,7 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
         else
         {
             // write the data
-            int written = writeData(data, len);
+            ssize_t written = writeData(data, len);
             if (written <= 0)
             {
                 // return error status if there was a problem
@@ -992,28 +999,35 @@ bool SysFile::getSize(int64_t &size)
     {
         // we might have pending output that might change the size
         flush();
-        // have a handle, use fstat() to get the info
-        struct _stati64 fileInfo;
-        if (_fstati64(fileHandle, &fileInfo) == 0)
+
+        // do we have a current file size? If not currently good, we need to
+        // get it again
+        if (fileSize == -1)
         {
-            // regular file?  return the defined size
-            if (fileInfo.st_dev == 0)
+            // have a handle, use fstat() to get the info
+            struct _stati64 fileInfo;
+            if (_fstati64(fileHandle, &fileInfo) == 0)
             {
-                size = fileInfo.st_size;
+                // regular file?  return the defined size
+                if (fileInfo.st_dev == 0)
+                {
+                    fileSize = fileInfo.st_size;
+                }
+                else
+                {
+                    fileSize = 0;
+                }
             }
-            else
-            {
-                size = 0;
-            }
-            return true;
         }
+        size = fileSize;      // use our cached value
+        return true;
     }
     return false;
 }
 
 /**
  * Retrieve the size of a file from the file name.  If the
- * name is a device, it zero is returned.
+ * name is not a regular file, zero is returned.
  *
  * @param size   The returned size value.
  *
@@ -1202,7 +1216,7 @@ bool SysFile::hasData()
     }
 
     // if there is buffered input, we can always return true
-    if (hasBufferedInput())
+    if (ungetchar != -1 || hasBufferedInput())
     {
         return true;
     }

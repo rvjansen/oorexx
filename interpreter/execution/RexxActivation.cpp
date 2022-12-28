@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -82,12 +82,6 @@
 #include "CommandIOConfiguration.hpp"
 #include "CommandIOContext.hpp"
 #include "LibraryPackage.hpp"
-
-
-
-
-
-
 
 /**
  * Create a new activation object
@@ -318,16 +312,16 @@ void RexxActivation::live(size_t liveMark)
 {
     memory_mark(previous);
     memory_mark(executable);
-    memory_mark(scope);
     memory_mark(code);
-    memory_mark(settings.securityManager);
+    memory_mark(packageObject);
+    memory_mark(scope);
     memory_mark(receiver);
     memory_mark(activity);
     memory_mark(parent);
     memory_mark(doStack);
-    // the stack and the local variables handle their own marking.
+    // settings and stack handle their own marking.
+    settings.live(liveMark);
     stack.live(liveMark);
-    settings.localVariables.live(liveMark);
     memory_mark(current);
     memory_mark(next);
     memory_mark(result);
@@ -335,23 +329,12 @@ void RexxActivation::live(size_t liveMark)
     memory_mark(notifyObject);
     memory_mark(environmentList);
     memory_mark(conditionQueue);
-    memory_mark(settings.traps);
-    memory_mark(settings.conditionObj);
-    memory_mark(settings.parentCode);
-    memory_mark(settings.currentAddress);
-    memory_mark(settings.alternateAddress);
-    memory_mark(settings.messageName);
-    memory_mark(settings.objectVariables);
-    memory_mark(settings.calltype);
-    memory_mark(settings.streams);
-    memory_mark(settings.haltDescription);
     memory_mark(contextObject);
 
     // We're hold a pointer back to our arguments directly where they
     // are created.  Since in some places, this argument list comes
-    // from the C stack, we need to handle the marker ourselves.
+    // from the C stack, we need to handle the marking ourselves.
     memory_mark_array(argCount, argList);
-    memory_mark_array(settings.parentArgCount, settings.parentArgList);
 }
 
 
@@ -365,14 +348,15 @@ void RexxActivation::liveGeneral(MarkReason reason)
     memory_mark_general(previous);
     memory_mark_general(executable);
     memory_mark_general(code);
-    memory_mark_general(settings.securityManager);
+    memory_mark_general(packageObject);
+    memory_mark_general(scope);
     memory_mark_general(receiver);
     memory_mark_general(activity);
     memory_mark_general(parent);
     memory_mark_general(doStack);
-    // the stack and the local variables handle their own marking.
+    // settings and stack handle their own marking.
+    settings.liveGeneral(reason);
     stack.liveGeneral(reason);
-    settings.localVariables.liveGeneral(reason);
     memory_mark_general(current);
     memory_mark_general(next);
     memory_mark_general(result);
@@ -380,23 +364,12 @@ void RexxActivation::liveGeneral(MarkReason reason)
     memory_mark_general(notifyObject);
     memory_mark_general(environmentList);
     memory_mark_general(conditionQueue);
-    memory_mark_general(settings.traps);
-    memory_mark_general(settings.conditionObj);
-    memory_mark_general(settings.parentCode);
-    memory_mark_general(settings.currentAddress);
-    memory_mark_general(settings.alternateAddress);
-    memory_mark_general(settings.messageName);
-    memory_mark_general(settings.objectVariables);
-    memory_mark_general(settings.calltype);
-    memory_mark_general(settings.streams);
-    memory_mark_general(settings.haltDescription);
     memory_mark_general(contextObject);
 
     // We're hold a pointer back to our arguments directly where they
     // are created.  Since in some places, this argument list comes
     // from the C stack, we need to handle the marking ourselves.
     memory_mark_general_array(argCount, argList);
-    memory_mark_general_array(settings.parentArgCount, settings.parentArgList);
 }
 
 
@@ -581,9 +554,15 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
     // we might have a package option that turned on tracing.  If this
     // is a routine or method invocation in one of those packages, give the
     // initial entry trace so the user knows where we are.
-    if (tracingAll() && isMethodOrRoutine())
+    // Must be one of ::OPTIONS TRACE ALL/RESULTS/INTERMEDIATES/LABELS
+    if (tracingLabels() && isMethodOrRoutine())
     {
         traceEntry();
+        if (!tracingAll())
+        {
+            // we pause on the label only for ::OPTIONS TRACE LABELS
+            pauseLabel();
+        }
     }
 
     // this is the main execution loop...continue until we get a terminating
@@ -645,6 +624,8 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
                     // save the nested setting
                     bool nested = parent->settings.localVariables.isNested();
                     // propagate parent's settings back
+                    // but keep the parent's message name as is
+                    settings.messageName = parent->settings.messageName;
                     parent->getSettings(settings);
                     if (!nested)
                     {
@@ -1453,9 +1434,35 @@ void RexxActivation::trapOn(RexxString *condition, RexxInstructionTrapBase *hand
         settings.localVariables.setNovalueOn();
         // we also need to disable the novalue error setting from ::OPTIONS in order for the
         // events to be raised.
-        disableNovalueError();
+        disableNovalueSyntax();
     }
-
+    // we also disable an OPTIONS condition SYNTAX that we may have
+    bool conditionIsAny = condition->strCompare(GlobalNames::ANY);
+    if (isErrorSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::ERRORNAME)))
+    {
+        disableErrorSyntax();
+    }
+    if (isFailureSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::FAILURE)))
+    {
+        disableFailureSyntax();
+    }
+    if (signal && isLostdigitsSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::LOSTDIGITS)))
+    {
+        disableLostdigitsSyntax();
+    }
+    if (signal && isNostringSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::NOSTRING)))
+    {
+        disableNostringSyntax();
+    }
+    if (isNotreadySyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::NOTREADY)))
+    {
+        disableNotreadySyntax();
+    }
 }
 
 
@@ -1467,17 +1474,48 @@ void RexxActivation::trapOn(RexxString *condition, RexxInstructionTrapBase *hand
 void RexxActivation::trapOff(RexxString *condition, bool signal)
 {
     checkTrapTable();
+
     // remove our existing trap.
     settings.traps->remove(condition);
     // if we no longer have NOVALUE or ANY enabled, then we can turn
     // off novalue processing in the variable pool
     // (we only need to check this for SIGNAL, not for CALL)
-    if (signal && !settings.traps->hasIndex(GlobalNames::NOVALUE) && !settings.traps->hasIndex(GlobalNames::ANY))
+    bool conditionIsAny = condition->strCompare(GlobalNames::ANY);
+    if (signal &&
+       (conditionIsAny || condition->strCompare(GlobalNames::NOVALUE)) &&
+       !settings.traps->hasIndex(GlobalNames::NOVALUE) && !settings.traps->hasIndex(GlobalNames::ANY))
     {
         settings.localVariables.setNovalueOff();
         // we also need to disable the novalue error setting from ::OPTIONS in order to restore
         // the real default behavior.
-        disableNovalueError();
+        disableNovalueSyntax();
+    }
+
+    // we also disable an OPTIONS condition SYNTAX that we may have
+    if (isErrorSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::ERRORNAME)))
+    {
+        disableErrorSyntax();
+    }
+    if (isFailureSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::FAILURE)))
+    {
+        disableFailureSyntax();
+    }
+    if (signal && isLostdigitsSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::LOSTDIGITS)))
+    {
+        disableLostdigitsSyntax();
+    }
+    if (signal && isNostringSyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::NOSTRING)))
+    {
+        disableNostringSyntax();
+    }
+    if (isNotreadySyntaxEnabled() &&
+       (conditionIsAny || condition->strCompare(GlobalNames::NOTREADY)))
+    {
+        disableNotreadySyntax();
     }
 }
 
@@ -1712,17 +1750,16 @@ void RexxActivation::raise(RexxString *condition, RexxObject *rc, RexxString *de
             // we'll use a generic message that doesn't require substitutions.
             else if (condition->strCompare(GlobalNames::NOMETHOD))
             {
-                // this is sort of tricky...the standard no method error requires a message name
-                // and a receiver object. If we don't have two objects in the ADDITIONAL, then we
-                // need to issue a generic message.
-                if (additional != OREF_NULL && isOfClass(Array, additional))
+                // this might be a propagate, in which case additional and description might not be
+                // set. Pull the current from the condition object.
+                additional = (RexxObject *)conditionobj->get(GlobalNames::ADDITIONAL);
+                description = (RexxString *)conditionobj->get(GlobalNames::DESCRIPTION);
+
+                // this is a CONDITION, not a syntax error at this point. The ADDITIONAL information
+                // is the receiver object, the message name is the description
+                if (additional != OREF_NULL && description != OREF_NULL)
                 {
-                    RexxObject *receiver = (RexxObject *)((ArrayClass *)additional)->get(1);
-                    RexxObject *messageName = (RexxObject *)((ArrayClass *)additional)->get(2);
-                    if (receiver != OREF_NULL && messageName != OREF_NULL)
-                    {
-                        reportException(Error_No_method_name, receiver, messageName);
-                    }
+                    reportException(Error_No_method_name, additional, description);
                 }
 
                 // if the error was not issued above, we fall through to here
@@ -1775,6 +1812,10 @@ VariableDictionary* RexxActivation::getObjectVariables()
  */
 RexxObject* RexxActivation::resolveStream(RexxString *name, bool input, Protected<RexxString> &fullName, bool *added)
 {
+    bool newName = true;
+    bool addName = false;
+    // if the file system is NOT case sensitive, remember the qualified name
+    StringTable *fileNames;
     // when the caller requires a stream table entry, then set the initial indicator.
     if (added != NULL)
     {
@@ -1813,9 +1854,34 @@ RexxObject* RexxActivation::resolveStream(RexxString *name, bool input, Protecte
     // not one of the standards...go looking for a file.
     else
     {
-        // get the fully qualified name
-        RexxString *qualifiedName = Interpreter::qualifyFileSystemName(name);
-        fullName = qualifiedName;
+        RexxString *qualifiedName;
+        if (notCaseSensitive()) // probably Windows
+        {
+            fileNames = getFileNames();
+            qualifiedName = (RexxString *)fileNames->get(name);
+            if (qualifiedName != OREF_NULL) // we have seen this name before
+            {
+                fullName = qualifiedName;
+                newName = false;    // don't redo the system calls
+            }
+            else
+            {
+                // add to fileNames only if the stream is going to be added
+                addName = (added != NULL);
+            }
+
+        }
+        if (newName)
+        {
+            // get the fully qualified name
+            qualifiedName = Interpreter::qualifyFileSystemName(name);
+            fullName = qualifiedName;
+        }
+        if (addName)
+        {
+            // add the name to the fileNames table for future requests
+            fileNames->put(qualifiedName, name);
+        }
         // see if we have this in the table already.  If not opened yet, we need
         // to try to open it.
         RexxObject *stream = (RexxObject *)streamTable->get(qualifiedName);
@@ -1886,6 +1952,8 @@ StringTable* RexxActivation::getStreams()
                 settings.streams = ((RexxActivation *)callerFrame)->getStreams();
             }
         }
+        // determine if the file system is case insensitive or not and save it
+        settings.caseInsensitive = !SysFileSystem::isCaseSensitive();
     }
     return settings.streams;
 }
@@ -2055,6 +2123,11 @@ bool RexxActivation::form()
 void RexxActivation::setDigits(wholenumber_t digitsVal)
 {
     settings.packageSettings.setDigits(digitsVal);
+    if (isInterpret())
+    {
+        // .context in an INTERPRET should pick up changes too
+        parent->setDigits(digitsVal);
+    }
 }
 
 
@@ -2066,6 +2139,11 @@ void RexxActivation::setDigits(wholenumber_t digitsVal)
 void RexxActivation::setFuzz(wholenumber_t fuzzVal)
 {
     settings.packageSettings.setFuzz(fuzzVal);
+    if (isInterpret())
+    {
+        // .context in an INTERPRET should pick up changes too
+        parent->setFuzz(fuzzVal);
+    }
 }
 
 /**
@@ -2076,6 +2154,11 @@ void RexxActivation::setFuzz(wholenumber_t fuzzVal)
 void RexxActivation::setForm(bool formVal)
 {
     settings.packageSettings.setForm(formVal);
+    if (isInterpret())
+    {
+        // .context in an INTERPRET should pick up changes too
+        parent->setForm(formVal);
+    }
 }
 
 
@@ -2437,7 +2520,7 @@ bool RexxActivation::willTrap(RexxString *condition)
 RexxObject* RexxActivation::handleNovalueEvent(RexxString *name, RexxObject *defaultValue, RexxVariable *variable)
 {
     // have we specified via ::options that errors should be raised?
-    if (isNovalueErrorEnabled())
+    if (isNovalueSyntaxEnabled())
     {
         reportException(Error_Execution_unassigned_variable, name);
     }
@@ -2907,7 +2990,7 @@ bool RexxActivation::callExternalRexx(RexxString *target, RexxObject **arguments
     }
 
     // Get full name including path
-    Protected<RexxString> filename = resolveProgramName(target);
+    Protected<RexxString> filename = resolveProgramName(target, RESOLVE_DEFAULT);
     if (!filename.isNull())
     {
         // try for a saved program or translate a anew
@@ -2973,13 +3056,14 @@ RoutineClass *RexxActivation::getMacroCode(RexxString *macroName)
  * This is resolved in the context of the calling program.
  *
  * @param name   The name to resolve.
+ * @param type   The resolve type, RESOLVE_DEFAULT or RESOLVE_REQUIRES.
  *
  * @return The fully resolved program name, or OREF_NULL if this can't be
  *         located.
  */
-RexxString *RexxActivation::resolveProgramName(RexxString *name)
+RexxString *RexxActivation::resolveProgramName(RexxString *name, ResolveType type)
 {
-    return code->resolveProgramName(activity, name);
+    return code->resolveProgramName(activity, name, type);
 }
 
 
@@ -4201,6 +4285,24 @@ void RexxActivation::command(RexxString *address, RexxString *commandString, Com
         // these are also not raised if it's a debug pause.
         if (conditionObj != OREF_NULL)
         {
+            // first check for an ::OPTIONS FAILURE SYNTAX override
+            if (failureCondition && isFailureSyntaxEnabled())
+            {
+                // we could rework our condition object, but it's easier
+                // to just raise a SYNTAX exception
+                reportException(Error_Execution_failure_syntax,
+                   (RexxString *)conditionObj->get(GlobalNames::DESCRIPTION),
+                   (RexxString *)conditionObj->get(GlobalNames::RC));
+            }
+            // next we check for an ::OPTIONS ERROR SYNTAX override
+            if (!failureCondition && isErrorSyntaxEnabled())
+            {
+                // just raise a SYNTAX exception
+                reportException(Error_Execution_error_syntax,
+                   (RexxString *)conditionObj->get(GlobalNames::DESCRIPTION),
+                   (RexxString *)conditionObj->get(GlobalNames::RC));
+            }
+
             // try to raise the condition, and if it isn't handled, we might
             // munge this into an ERROR condition
             if (!activity->raiseCondition(conditionObj))
@@ -4209,6 +4311,15 @@ void RexxActivation::command(RexxString *address, RexxString *commandString, Com
                 // reraise
                 if (failureCondition)
                 {
+                    // again, first check for an ::OPTIONS ERROR SYNTAX override
+                    if (isErrorSyntaxEnabled())
+                    {
+                        // if so, just raise a SYNTAX exception
+                        reportException(Error_Execution_error_syntax,
+                           (RexxString *)conditionObj->get(GlobalNames::DESCRIPTION),
+                           (RexxString *)conditionObj->get(GlobalNames::RC));
+                    }
+
                     // just change the condition name
                     conditionObj->put(GlobalNames::ERRORNAME, GlobalNames::CONDITION);
                     activity->raiseCondition(conditionObj);
@@ -4788,4 +4899,43 @@ RexxString *RexxActivation::formatSourcelessTraceLine(RexxString *packageName)
 ArrayClass *RexxActivation::getStackFrames(bool skipFirst)
 {
     return activity->generateStackFrames(skipFirst);
+}
+
+
+/**
+ * Return the associated object variables fileNames table
+ *
+ * @return The table of opened streams file names.
+ */
+StringTable* RexxActivation::getFileNames()
+{
+    // first request for a file name?  We need to
+    // create the table.
+    if (settings.fileNames == OREF_NULL)
+    {
+        settings.fileNames = new_string_table();
+    }
+    return settings.fileNames;
+}
+
+
+/**
+ * Remove a filename from the short name lookup table
+ *
+ * @param fullName   The fully qualified name
+ */
+void RexxActivation::removeFileName(RexxString *fullName)
+{
+    // remove from the direct stream table
+    getStreams()->remove(fullName);
+    // if we have other lookups possible, remove all of the shortcuts
+    if (notCaseSensitive() && settings.fileNames != OREF_NULL)
+    {
+        RexxInternalObject *removed;
+        do
+        {
+            removed = settings.fileNames->removeItem(fullName);
+        }
+        while (removed != OREF_NULL);
+    }
 }

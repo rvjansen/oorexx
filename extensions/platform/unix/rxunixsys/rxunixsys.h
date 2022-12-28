@@ -1,11 +1,11 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Copyright (c) 2009-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2009-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -33,9 +33,6 @@
 /* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS         */
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.               */
 /*                                                                            */
-/* Authors;                                                                   */
-/*       W. David Ashley <dashley@us.ibm.com>                                 */
-/*                                                                            */
 /*----------------------------------------------------------------------------*/
 
 
@@ -59,19 +56,20 @@
 #include <grp.h>
 #include <time.h>
 #include <netdb.h>
-#if !defined(OPENBSD)
+#include <arpa/inet.h>
+#ifdef HAVE_WORDEXP_H
 #include <wordexp.h>
 #endif
-#if !defined(AIX) && !defined(OPENBSD)
+#ifdef HAVE_ALLOCA
 #include <alloca.h>
 #endif
 #include <pthread.h>
 #include <errno.h>
 #include <dirent.h>
 
-// These are the special OS specific cases
-#ifdef HAVE_XATTR_H
-#include <attr/xattr.h>
+#ifdef HAVE_SYS_XATTR_H
+#define HAVE_XATTR 1
+#include <sys/xattr.h>
 #endif
 
 /*----------------------------------------------------------------------------*/
@@ -80,10 +78,28 @@
 
 #if defined(__APPLE__)
 # define stat64 stat
-# define HOST_NAME_MAX _POSIX_HOST_NAME_MAX
+
+// on DARWIN the xattr functions have additional arguments
+// ssize_t getxattr(const char *path, const char *name, void *value, size_t size, u_int32_t position, int options);
+// int setxattr(const char *path, const char *name, const void *value, size_t size, u_int32_t position, int options);
+// int removexattr(const char *path, const char *name, int options);
+// ssize_t listxattr(const char *path, char *namebuff, size_t size, int options);
+#define GetXattr(path, name, value, size) getxattr(path, name, value, size, 0, 0)
+#define SetXattr(path, name, value, size, options) setxattr(path, name, value, size, 0, options)
+#define RemoveXattr(path, name) removexattr(path, name, 0)
+#define ListXattr(path, namebuff, size) listxattr(path, namebuff, size, 0)
+#else
+#define GetXattr getxattr
+#define SetXattr setxattr
+#define RemoveXattr removexattr
+#define ListXattr listxattr
 #endif
 
-#ifdef __sun
+#if defined(OPSYS_NETBSD) || defined(OPSYS_FREEBSD) || defined(OPSYS_OPENBSD)
+#define stat64 stat
+#endif
+
+#if !defined(HOST_NAME_MAX) && defined(_POSIX_HOST_NAME_MAX)
 # define HOST_NAME_MAX _POSIX_HOST_NAME_MAX
 #endif
 
@@ -91,6 +107,6 @@
 /* Global variables                                                           */
 /*----------------------------------------------------------------------------*/
 
- 
+
 #endif /* ORXUNIXAPI_H */
- 
+

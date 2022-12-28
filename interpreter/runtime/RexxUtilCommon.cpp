@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -112,7 +112,8 @@ class LineReader
              size_t bytesRead = 0;
              if (!file.gets(buffer + size, bufferSize - size, bytesRead))
              {
-                 return false;
+                 // we might have data from a previous iteration of the loop
+                 return size == 0 ? false : true;
              }
              // update the size of the line now
              size += bytesRead;
@@ -130,12 +131,6 @@ class LineReader
                  return true;
              }
 
-             // No new line but we hit end of file reading this?  This will be the
-             // entire line then.
-             if (file.atEof())
-             {
-                 return true;
-             }
              bufferSize += BufferExpansionSize;
              if (!buffer.realloc(bufferSize))
              {
@@ -292,7 +287,7 @@ void getUniqueFileName(const char *fileTemplate, char filler, FileNameBuffer &fi
  * @return  0 on success, non-zero on error.  For all errors, a condition is
  *          raised.
  */
-RexxRoutine5(uint32_t, SysFileTree, CSTRING, fileSpec, RexxStemObject, files, OPTIONAL_CSTRING, opts,
+RexxRoutine5(uint32_t, SysFileTree, CSTRING, fileSpec, RexxObjectPtr, files, OPTIONAL_CSTRING, opts,
              OPTIONAL_CSTRING, targetAttr, OPTIONAL_CSTRING, newAttr)
 {
     try
@@ -316,12 +311,10 @@ RexxRoutine5(uint32_t, SysFileTree, CSTRING, fileSpec, RexxStemObject, files, OP
 
 // this next section are platform-independent methods for the TreeFinder class.
 // platform-specific methods are located in the appropriate SysRexxUtil.cpp file.
-TreeFinder::TreeFinder(RexxCallContext *c, const char *f, RexxStemObject s, const char *opts, const char *targetAttr, const char *newAttr) :
-    context(c), count(0), files(s), filePath(c), fileSpec(c),
+TreeFinder::TreeFinder(RexxCallContext *c, const char *f, RexxObjectPtr sa, const char *opts, const char *targetAttr, const char *newAttr) :
+    context(c), stemArray(c, sa, 2), filePath(c), fileSpec(c),
     foundFile(c), foundFileLine(c), nameSpec(c)
 {
-    // clear any existing count to be zero before we start looking
-    context->SetStemArrayElement(files, 0, context->WholeNumber(0));
     // save the initial file spec
     fileSpec = f;
     // validate the file specification
@@ -341,7 +334,7 @@ TreeFinder::TreeFinder(RexxCallContext *c, const char *f, RexxStemObject s, cons
 TreeFinder::~TreeFinder()
 {
     // make sure we finalized the count before returning.
-    context->SetStemArrayElement(files, 0, context->WholeNumber(count));
+    stemArray.complete();
 }
 
 
@@ -391,14 +384,15 @@ void TreeFinder::validateFileSpec()
         nullStringException(context, "SysFileTree", 1);
     }
 
-    // apply any platform-specific rules to the file spec name.
-    validateFileSpecName();
-
     // apply platform rules to adjust for directories.
     adjustDirectory();
 
     // perform any adjustments needed to the spec
     adjustFileSpec();
+
+    // apply any platform-specific rules to the file spec name.
+    // run this last so that we validate the adjusted final file name.
+    validateFileSpecName();
 }
 
 
@@ -499,7 +493,7 @@ bool TreeFinder::goodOpts(const char *opts)
 {
     while (*opts)
     {
-        switch (toupper(*opts))
+        switch (Utilities::toUpper(*opts))
         {
             case 'S':                      // recurse into subdirectories
                 options[RECURSE] = true;
@@ -557,7 +551,7 @@ bool TreeFinder::goodOpts(const char *opts)
  * the file name portion.  The path portion is then returned in
  * filePath and the file name portion is returned in nameSpec.
  *
- * The filePOath portion will end with the PathDelimiter
+ * The filePath portion will end with the PathDelimiter
  * character if the filespec contains a path.
  *
  */
@@ -751,12 +745,8 @@ void TreeFinder::recursiveFindFile(FileNameBuffer &path)
  */
 void TreeFinder::addResult(const char *v)
 {
-    RexxStringObject t = context->String(v);
-
-    // Add the file name to the stem and be done with it.
-    count++;
-    context->SetStemArrayElement(files, count, t);
-    context->ReleaseLocalReference(t);
+    // Add this value to our results Stem or Array
+    stemArray.addValue(v);
 }
 
 
@@ -810,7 +800,7 @@ const char* mystrstr(const char *haystack, const char *needle, size_t hlen, size
     else
     {
         // we scan, looking for a hit on the first character
-        char firstChar = toupper(needle[0]);
+        char firstChar = Utilities::toUpper(needle[0]);
 
         size_t current = 0;
         // this is maximum number of places we can get a hit
@@ -818,7 +808,7 @@ const char* mystrstr(const char *haystack, const char *needle, size_t hlen, size
         for (current = 0; current < limit; current++)
         {
             // if we have a hit on the first character, check the entire string
-            if (firstChar == toupper(haystack[current]))
+            if (firstChar == Utilities::toUpper(haystack[current]))
             {
                 // if everything compares, return the hit
                 if (Utilities::memicmp(haystack + current, needle, nlen) == 0)
@@ -1719,22 +1709,22 @@ RexxRoutine1(int, SysFileDelete, CSTRING, path)
  *                'I' - Case-insensitive search (default)
  *                'N' - Precede each found string in result stem
  *                      with its line number in file (non-default)
-* @return  0 on success, non-zero on error.
- *         ERROR_FILEOPEN if file cannot be openend.
+ * @return  0 on success, non-zero on error.
+ *         ERROR_FILEOPEN if file cannot be opened.
  *         ERROR_NOMEM if not enough memory.
  */
 
-RexxRoutine4(CSTRING, SysFileSearch, RexxStringObject, needle, CSTRING, file, RexxStemObject, stem, OPTIONAL_CSTRING, opts)
+RexxRoutine4(CSTRING, SysFileSearch, RexxStringObject, needle, CSTRING, file, RexxObjectPtr, stem, OPTIONAL_CSTRING, opts)
 {
     bool        linenums = false;        // should line numbers be inclued in the output
-    bool        sensitive = false;       // how should searchs be performed
+    bool        sensitive = false;       // how should searches be performed
 
     // was the option specified?
     if (opts != NULL)
     {
         for (size_t i = 0; i < strlen(opts); i++)
         {
-            switch (toupper(opts[i]))
+            switch (Utilities::toUpper(opts[i]))
             {
                 case 'N':
                 {
@@ -1767,12 +1757,14 @@ RexxRoutine4(CSTRING, SysFileSearch, RexxStringObject, needle, CSTRING, file, Re
         }
     }
 
+    StemHandler stemVariable(context, stem, 3);
     LineReader fileSource;
     RoutineQualifiedName qualifiedName(context, file);
 
     // if we can't open, return the error indicator
     if (!fileSource.open(qualifiedName))
     {
+        // no items are returned
         return ERROR_FILEOPEN;
     }
 
@@ -1784,8 +1776,6 @@ RexxRoutine4(CSTRING, SysFileSearch, RexxStringObject, needle, CSTRING, file, Re
 
     size_t currentLine = 0;
 
-    size_t currentStemIndex = 0;
-
     // keep reading while we find lines
     while (fileSource.getLine(line, lineLength))
     {
@@ -1796,42 +1786,34 @@ RexxRoutine4(CSTRING, SysFileSearch, RexxStringObject, needle, CSTRING, file, Re
         {
             if (linenums)
             {
-                char lineNumber[16];
+                char lineNumber[32]; // 64-bit numbers require 20 chars + blank + NUL
                 snprintf(lineNumber, sizeof(lineNumber), "%zu ", currentLine);
 
-                size_t totalLineSize = strlen(lineNumber) + lineLength;
+                size_t lineNumberLength = strlen(lineNumber);
+                size_t totalLineSize = lineNumberLength + lineLength;
 
-                AutoFree lineBuffer = (char *)malloc(totalLineSize + 8);
+                AutoFree lineBuffer = (char *)malloc(totalLineSize);
                 if (lineBuffer == NULL)
                 {
-                    // make sure we update the count with the number of return items
-                    context->SetStemArrayElement(stem, 0, context->StringSizeToObject(currentStemIndex));
+                    // we still return the items we've collected so far
                     return ERROR_NOMEM;
                 }
 
                 // now build the return value
-                strncpy((char *)lineBuffer, lineNumber, sizeof(totalLineSize));
-                memcpy((char *)lineBuffer + strlen(lineNumber), line, lineLength);
+                memcpy((char *)lineBuffer, lineNumber, lineNumberLength);
+                memcpy((char *)lineBuffer + lineNumberLength, line, lineLength);
 
-                RexxStringObject returnValue = context->NewString(lineBuffer, totalLineSize);
-
-                context->SetStemArrayElement(stem, ++currentStemIndex, returnValue);
-                context->ReleaseLocalReference(returnValue);
+                stemVariable.addValue(lineBuffer, totalLineSize);
             }
             else
             {
-                RexxStringObject returnValue = context->NewString(line, lineLength);
-
-                context->SetStemArrayElement(stem, ++currentStemIndex, returnValue);
-                context->ReleaseLocalReference(returnValue);
+                stemVariable.addValue(line, lineLength);
             }
         }
     }
 
     fileSource.close();
 
-    // make sure we update the count with the number of return items
-    context->SetStemArrayElement(stem, 0, context->StringSizeToObject(currentStemIndex));
     return "0"; // success
 }
 
@@ -1858,7 +1840,7 @@ RexxRoutine3(RexxStringObject, SysSearchPath, CSTRING, path, CSTRING, file, OPTI
     char opt = 'C'; // this is the default
     if (options != NULL)
     {
-        opt = toupper(options[0]);
+        opt = Utilities::toUpper(options[0]);
         if (opt != 'C' && opt != 'N')
         {
             invalidOptionException(context, "SysSearchPath", "option", "'C' or 'N'", options);
@@ -1940,8 +1922,7 @@ RexxRoutine1(int, SysSleep, RexxStringObject, delay)
     uint64_t microseconds = (uint64_t)(seconds * 1000000);
 
     // go do the sleep
-    SysThread::longSleep(microseconds);
-    return 0;
+    return SysThread::longSleep(microseconds);
 }
 
 /*************************************************************************

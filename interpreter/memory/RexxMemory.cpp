@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -1416,6 +1416,10 @@ void MemoryObject::saveImage(const char *imageTarget)
 
         // mark any other referenced objects in the copy.
         copyObject->liveGeneral(SAVINGIMAGE);
+        // so that we don't store variable pointer values in the image, null out the
+        // copy object virtual function pointer now that we're done with it
+        copyObject->setVirtualFunctions(NULL);
+
         // if this is a non-primitive behaviour, we need to mark that also
         // so that it is copied into the buffer.  The primitive behaviours have already
         // been handled as part of the savearray.

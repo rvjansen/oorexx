@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -983,7 +983,6 @@ RexxInstruction* LanguageParser::callOnNew(InstructionSubKeyword type)
         condType == CONDITION_PROPAGATE ||
         condType == CONDITION_SYNTAX ||
         condType == CONDITION_NOVALUE ||
-        condType == CONDITION_PROPAGATE ||
         condType == CONDITION_LOSTDIGITS ||
         condType == CONDITION_NOMETHOD ||
         condType == CONDITION_NOSTRING)
@@ -1085,7 +1084,7 @@ RexxInstruction* LanguageParser::dynamicCallNew(RexxToken *token)
     // this is a full expression in parens
     RexxInternalObject *targetName = parenExpression(token);
     // an expression is required
-    if (name == OREF_NULL)
+    if (targetName == OREF_NULL)
     {
         syntaxError(Error_Invalid_expression_call);
     }
@@ -1153,7 +1152,7 @@ RexxInstruction* LanguageParser::callNew()
     size_t argCount = 0;
     bool noInternal = false;
 
-    // get the next token (skipping over any blank following the CALL keyword
+    // get the next token (skipping over any blank) following the CALL keyword
     RexxToken *token = nextReal();
 
     // there must be something here.
@@ -1177,10 +1176,10 @@ RexxInstruction* LanguageParser::callNew()
         previousToken();
 
 
-        // check for a matching subkeyword.  On ON or OFF are of significance
+        // check for a matching subkeyword.  ON or OFF are of significance
         // here.
         InstructionSubKeyword keyword = token->subKeyword();
-        // one of the special forms, this has it's own parsing code.
+        // one of the special forms, this has its own parsing code.
         if (keyword == SUBKEY_ON || keyword == SUBKEY_OFF)
         {
             return callOnNew(keyword);
@@ -1206,7 +1205,7 @@ RexxInstruction* LanguageParser::callNew()
         argCount = parseArgList(OREF_NULL, TERM_EOC);
         // because this uses a string name, the internal label
         // search is bypassed.
-        noInternal = false;
+        noInternal = true;
     }
     // is this call (expr) form?
     else if (token->isLeftParen())
@@ -2596,7 +2595,7 @@ RexxInstruction *LanguageParser::guardNew()
     // first token must be either GUARD ON or GUARD OFF.
     if (!token->isSymbol())
     {
-        syntaxError(Error_Symbol_expected_numeric, token);
+        syntaxError(Error_Invalid_subkeyword_guard, token);
     }
 
     // this tells us which way to set
@@ -2634,8 +2633,9 @@ RexxInstruction *LanguageParser::guardNew()
             {
                 // turn on variable tracking during expression evaluation
                 setGuard();
-                // evaluate the WHEN expression, which is required
-                expression = requiredExpression(TERM_EOC, Error_Invalid_expression_guard);
+                // evaluate the WHEN expression, which is required. It is also a logical
+                // expression, so commas are allowed.
+                expression = requiredLogicalExpression(TERM_EOC, Error_Invalid_expression_guard);
 
                 // get the guard expression variable list
                 variable_list = getGuard();
@@ -2800,12 +2800,16 @@ RexxInstruction *LanguageParser::labelNew(RexxToken *nameToken, RexxToken *colon
     /* add to the label list             */
     addLabel(newObject, name);
 
+    // complete construction of this.
+    ::new((void *)newObject)RexxInstructionLabel();
+
+    // NOTE: do this after calling the constructor. With some compilers, the base constructor
+    // get's called, which resets the location information.
+
     // use the name object for tracking the location.
     SourceLocation location = colonToken->getLocation();
     // the clause ends with the colon.
     newObject->setEnd(location.getEndLine(), location.getEndOffset());
-    // complete construction of this.
-    ::new ((void *)newObject) RexxInstructionLabel();
     return newObject;
 }
 

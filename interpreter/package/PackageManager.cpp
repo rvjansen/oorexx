@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -168,6 +168,14 @@ void PackageManager::restore()
  */
 void PackageManager::live(size_t liveMark)
 {
+    // These variables reference objects that reside inside the loaded
+    // image, which never gets marked or swept, so it is not necessary
+    // for these to be marked:
+    // imagePackages
+    // imagePackageRoutines
+    // imageRegisteredRoutines
+    // imageLoadedRequires
+
     memory_mark(packages);
     memory_mark(packageRoutines);
     memory_mark(registeredRoutines);
@@ -789,8 +797,6 @@ PackageClass *PackageManager::loadRequires(Activity *activity, RexxString *short
  */
 PackageClass *PackageManager::getMacroSpaceRequires(Activity *activity, RexxString *name, Protected<PackageClass> &package, RexxObject *securityManager)
 {
-    // make sure we're not stuck in a circular reference
-    activity->checkRequires(name);
     // unflatten the method and protect it
     RoutineClass *code = RexxActivation::getMacroCode(name);
     package = code->getPackage();
@@ -817,8 +823,6 @@ PackageClass *PackageManager::getMacroSpaceRequires(Activity *activity, RexxStri
  */
 PackageClass *PackageManager::getRequiresFile(Activity *activity, RexxString *name, RexxObject *securityManager, Protected<PackageClass> &package)
 {
-    // make sure we're not stuck in a circular reference
-    activity->checkRequires(name);
     // try to load this from a previously compiled source file or
     // translate it a new if not.
     package = LanguageParser::createPackage(name);

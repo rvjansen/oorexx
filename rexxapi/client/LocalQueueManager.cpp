@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -88,9 +88,8 @@ bool LocalQueueManager::validateQueueName(const char *username, bool &isSession)
         const char *valptr = username;      /* point to name              */
         char ch;
         while ((ch = *(valptr++)))
-        {         /* While have not reached end */
-            ch = toupper(ch);               /* convert to upper case      */
-            if (!isalpha(ch) && !isdigit(ch) && ch != ch_PERIOD &&
+        {
+            if (!Utilities::isAlpha(ch) && !Utilities::isDigit(ch) && ch != ch_PERIOD &&
                 ch != ch_QUESTION_MARK && ch != ch_EXCLAMATION && ch != ch_UNDERSCORE)
             {
                 return false;
@@ -491,6 +490,8 @@ RexxReturnCode LocalQueueManager::pullFromQueue(const char *name, RXSTRING &data
             {
                 throw new ServiceException(MEMORY_ERROR, "LocalQueueManager::pullFromQueue() Failure allocating memory");
             }
+            // add a courtesy null terminator
+            data.strptr[data.strlength] = '\0';
         }
         // if the timestamp was requested, return it.
         if (timeStamp != NULL)

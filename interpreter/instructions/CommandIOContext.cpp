@@ -5,7 +5,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -207,6 +207,9 @@ RexxString *CommandIOContext::readInput(NativeActivation *context)
  */
 void CommandIOContext::readInputBuffered(NativeActivation *context, const char *&data, size_t &length)
 {
+    // set the length to zero in case input is not redirected.
+    length = 0;
+
     // first make sure we have a source object
     if (input != OREF_NULL)
     {

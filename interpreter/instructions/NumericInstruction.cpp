@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -81,7 +81,14 @@ void RexxInstructionNumeric::execute(RexxActivation *context, ExpressionStack *s
         // no expression?  Just set digits back to default
         if (expression == OREF_NULL)
         {
-            context->setDigits(Numerics::DEFAULT_DIGITS);
+            wholenumber_t defaultDigits = context->getPackage()->getDigits();
+            // digits cannot be less than or equal to fuzz
+            if (defaultDigits <= context->fuzz())
+            {
+                reportException(Error_Expression_result_digits, defaultDigits, context->fuzz());
+            }
+            // set the value
+            context->setDigits(defaultDigits);
         }
         // expression version
         else
@@ -112,7 +119,14 @@ void RexxInstructionNumeric::execute(RexxActivation *context, ExpressionStack *s
         // no expression resets to default
         if (expression == OREF_NULL)
         {
-            context->setFuzz(Numerics::DEFAULT_FUZZ);
+            wholenumber_t defaultFuzz = context->getPackage()->getFuzz();
+            // cannot be greater than or equal to digits
+            if (defaultFuzz >= context->digits())
+            {
+                reportException(Error_Expression_result_digits, context->digits(), defaultFuzz);
+            }
+            // set the value
+            context->setFuzz(defaultFuzz);
         }
         else
         {
@@ -145,7 +159,7 @@ void RexxInstructionNumeric::execute(RexxActivation *context, ExpressionStack *s
             // if default form, set that
             if (numericFlags[numeric_form_default])
             {
-                context->setForm(Numerics::DEFAULT_FORM);
+                context->setForm(context->getPackage()->getForm());
             }
             else
             {

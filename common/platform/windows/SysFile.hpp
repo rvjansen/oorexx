@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2017 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -114,6 +114,7 @@ public:
     bool countLines(int64_t start, int64_t end, int64_t &lastLine, int64_t &count);
     bool nextLine(size_t &bytesRead);
     bool seekForwardLines(int64_t startPosition, int64_t &lineCount, int64_t &endPosition);
+
     inline bool isTransient() { return transient; }
     inline bool isDevice() { return device; }
     inline bool isReadable() { return readable; }
@@ -129,7 +130,7 @@ public:
 
 protected:
     void   getStreamTypeInfo();
-    int    writeData(const char *data, size_t length);
+    ssize_t writeData(const char *data, size_t length);
 
     int    fileHandle;      // separate file handle
     int    errInfo;         // last error info
@@ -146,14 +147,13 @@ protected:
     bool   isTTY;           // a keyboard based stream.
     char  *buffer;          // our read/write buffer.
     size_t bufferSize;      // the size of the buffer
-    size_t bufferPosition; // current read/write position in buffer
+    size_t bufferPosition;  // current read/write position in buffer
     size_t bufferedInput;   // amount of data in the buffer
     bool   writeBuffered;   // false == read, true == write
     bool   append;          // opened in append mode
     int64_t filePointer;    // current file pointer location
     int    ungetchar;       // a pushed back character value
+    int64_t fileSize;       // current known file size
 };
 
 #endif
-
-

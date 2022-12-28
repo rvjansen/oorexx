@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -46,47 +46,6 @@
 #include "SystemInterpreter.hpp"
 #include "RexxActivation.hpp"
 
-#include <fcntl.h>
-#include <io.h>
-
-
-BOOL __stdcall WinConsoleCtrlHandler(DWORD dwCtrlType)
-/******************************************************************************/
-/* Arguments:  Report record, registration record, context record,            */
-/*             dispatcher context                                             */
-/*                                                                            */
-/* DESCRIPTION : For Control Break conditions issue a halt to activation      */
-/*               Control-C or control-Break is pressed.                       */
-/*                                                                            */
-/*  Returned:  Action code                                                    */
-/******************************************************************************/
-{
-    // check to condition for all threads of this process */
-
-    if ((dwCtrlType == CTRL_CLOSE_EVENT) || (dwCtrlType == CTRL_SHUTDOWN_EVENT))
-    {
-        return false;  /* send to system */
-    }
-
-    /* if RXCTRLBREAK=NO then ignore SIGBREAK exception */
-    if (dwCtrlType == CTRL_BREAK_EVENT || dwCtrlType == CTRL_LOGOFF_EVENT)
-    {
-        char envp[65];
-        if (GetEnvironmentVariable("RXCTRLBREAK", envp, sizeof(envp)) > 0 && strcmp("NO",envp) == 0)
-        {
-            return true;    /* ignore signal */
-        }
-    }
-
-    if (dwCtrlType == CTRL_LOGOFF_EVENT)
-    {
-        return false;    /* send to system */
-    }
-
-    // we need to do something about this one, let the system interpreter handle
-    return SystemInterpreter::processSignal(dwCtrlType);
-}
-
 
 /**
  * Initialize the interpreter instance.
@@ -110,24 +69,6 @@ void SysInterpreterInstance::initialize(InterpreterInstance *i, RexxOption *opti
         }
     }
 
-    // Because of using the stand-alone runtime library or when using different compilers,
-    // the std-streams of the calling program and the REXX.DLL might be located at different
-    // addresses and therefore _file might be -1. If so, std-streams are reassigned to the
-    // file standard handles returned by the system
-    if ((_fileno(stdin) < 0) && (GetFileType(GetStdHandle(STD_INPUT_HANDLE)) != FILE_TYPE_UNKNOWN))
-    {
-        *stdin = *_fdopen(_open_osfhandle((intptr_t)GetStdHandle(STD_INPUT_HANDLE),_O_RDONLY), "r");
-    }
-    if ((_fileno(stdout) < 0) && (GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) != FILE_TYPE_UNKNOWN))
-    {
-        *stdout = *_fdopen(_open_osfhandle((intptr_t)GetStdHandle(STD_OUTPUT_HANDLE),_O_APPEND), "a");
-    }
-    if ((_fileno(stderr) < 0) && (GetFileType(GetStdHandle(STD_ERROR_HANDLE)) != FILE_TYPE_UNKNOWN))
-    {
-        *stderr = *_fdopen(_open_osfhandle((intptr_t)GetStdHandle(STD_ERROR_HANDLE),_O_APPEND), "a");
-    }
-    // enable trapping for CTRL_C exceptions
-    SetConsoleCtrlHandler(&WinConsoleCtrlHandler, true);
     instance = i;
 
     // add our default search extension
@@ -140,7 +81,6 @@ void SysInterpreterInstance::initialize(InterpreterInstance *i, RexxOption *opti
  */
 void SysInterpreterInstance::terminate()
 {
-    SetConsoleCtrlHandler(&WinConsoleCtrlHandler, false);
 }
 
 
@@ -200,20 +140,21 @@ SysSearchPath::SysSearchPath(const char *parentDir, const char *extensionPath)
     // parent directory
     addPath(parentDir);
     // add on the current directory
-    addPath(".;");
-
+    addPath(".");
+    // next comes the extension path defined on the instance
     addPath(extensionPath);
 
-    // add on the Rexx path, then the normal path
-    GetEnvironmentVariable("REXX_PATH", (char *)path + path.length(), (DWORD)rexxPathSize + 1);
+    // followed by the REXX_PATH
     if (!path.endsWith(';'))
     {
         path += ";";
     }
+    GetEnvironmentVariable("REXX_PATH", (char *)path + path.length(), (DWORD)rexxPathSize + 1);
 
-    GetEnvironmentVariable("PATH", (char *)path + path.length(), (DWORD)pathSize + 1);
-    if (path.at(path.length() - 1) != ';')
+    // and finally the PATH
+    if (!path.endsWith(';'))
     {
         path += ";";
     }
+    GetEnvironmentVariable("PATH", (char *)path + path.length(), (DWORD)pathSize + 1);
 }

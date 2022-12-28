@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -301,17 +301,16 @@ class MemorySegmentSet
       }
       void addSegments(size_t requiredSpace);
 
-      inline void validateObject(size_t bytes)
+      inline void validateObject(RexxInternalObject *o)
       {
-      #ifdef CHECKOREFS
-          /* is object invalid size?           */
-          if (!MemoryObject::isValidSize(bytes)) {
-              /* Yes, this is not good.  Exit      */
-              /* Critical Section and report       */
-              /* unrecoverable error.              */
-              Interpreter::logicError("Bad object detected during Garbage Collection, unable to continue");
+#ifdef _DEBUG
+          // does this object pass the basic validity tests?
+          if (!o->isValid())
+          {
+              // provide a warning message about an invalid object
+              o->dumpObject();
           }
-      #endif
+#endif
       }
 
 

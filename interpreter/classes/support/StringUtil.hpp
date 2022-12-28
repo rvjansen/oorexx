@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -45,6 +45,7 @@
 #define Included_StringUtil
 
 #include <ctype.h>
+#include "Utilities.hpp"
 
 class RexxInteger;
 class ArrayClass;
@@ -92,6 +93,7 @@ public:
     static const char  *locateSeparator(const char *start, const char *end, const char *sepData, size_t sepLength);
     static bool decodeBase64(const char *source, size_t inputLength, char *destination, size_t &outputLength);
     static void encodeBase64(const char *source, size_t inputLength, MutableBuffer *destination, size_t chunkSize);
+
 
     static inline bool matchCharacter(char ch, const char *charSet, size_t len)
     {

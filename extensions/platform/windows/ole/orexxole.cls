@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -56,7 +56,7 @@ Syntax:
 ::METHOD init EXTERNAL "LIBRARY OREXXOLE OLEObject_Init"
 ::METHOD uninit EXTERNAL "LIBRARY OREXXOLE OLEObject_Uninit"
 ::METHOD addRef private EXTERNAL "LIBRARY OREXXOLE OLEObject_addRef_pvt"
-::METHOD hasOLEMethod private EXTERNAL "LIBRARY OREXXOLE OLEObject_hasOLEMethod_pvt"
+::METHOD hasOLEMethod EXTERNAL "LIBRARY OREXXOLE OLEObject_hasOLEMethod"
 ::METHOD unknown EXTERNAL "LIBRARY OREXXOLE OLEObject_Unknown"
 ::METHOD request EXTERNAL "LIBRARY OREXXOLE OLEObject_Request"
 ::METHOD getConstant EXTERNAL "LIBRARY OREXXOLE OLEObject_GetConst"
@@ -103,6 +103,18 @@ Syntax:
     forward message("UNKNOWN") ARRAY("CLASS", arg(1, 'A'))
   else
     forward class (super)
+
+::ATTRIBUTE "PROGID" GET
+  expose !progid progid_!
+  if var("!PROGID") then return !progid
+  if var("PROGID_!") then return progid_! -- derived from IDISPATCH
+  return .nil
+
+::ATTRIBUTE "CLSID"     GET
+  expose !clsid clsid_!
+  if var("!CLSID") then return !clsid
+  if var("CLSID_!") then return clsid_!  -- derived from IDISPATCH
+  return .nil
 
 ::METHOD "!OLEOBJECT" ATTRIBUTE
 

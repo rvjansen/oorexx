@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -161,14 +161,14 @@ RexxObject *RexxExpressionMessage::evaluate(RexxActivation *context, ExpressionS
     // do we have a super class override?
     if (super != OREF_NULL)
     {
-        // super class overrides are only allowed if the
-        // sender and the target are the same object (i.e., a message to SELF)
-        if (_target != context->getReceiver())
-        {
-            reportException(Error_Execution_super);
-        }
-
         _super = (RexxClass *)super->evaluate(context, stack);
+        // _super an instance of TheClassClass
+        if (!_super->isInstanceOf(TheClassClass))
+        {
+            reportException(Error_Invalid_argument_noclass, "SCOPE", "Class");
+        }
+        // validate the starting scope
+        _target->validateScopeOverride(_super);
         // we send the message using the stack, which
         // expects to find the target and the arguments
         // on the stack, but not the super.  We need to
@@ -242,11 +242,6 @@ void RexxExpressionMessage::assign(RexxActivation *context, RexxObject *value)
     // message override?
     if (super != OREF_NULL)
     {
-        // in this context, the value needs to be SELF
-        if (_target != context->getReceiver())
-        {
-            reportException(Error_Execution_super);
-        }
         // evaluate the superclass override
         _super = (RexxClass *)super->evaluate(context, stack);
         // we need to remove this from the stack for the send operation to work.

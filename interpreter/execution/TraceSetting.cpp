@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -150,7 +150,7 @@ bool TraceSetting::parseTraceSetting(RexxString *value, char &badOption)
     // words, but this can also have a prefix.
     for (size_t pos = 0; pos < length; pos++)
     {
-        switch (toupper(value->getChar(pos)))
+        switch (Utilities::toUpper(value->getChar(pos)))
         {
             // Toggle the debug character...we can have any number of these, we
             // only perform an operation if we have an odd number of them.

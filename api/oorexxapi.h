@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -59,7 +59,7 @@
 #define REXX_VALUE_OSELF       6
 #define REXX_VALUE_SUPER       7
 
-// each of the following typese have an optional equivalent
+// each of the following types has an optional equivalent
 
 #define REXX_VALUE_RexxObjectPtr          11
 #define REXX_VALUE_int                    12
@@ -73,16 +73,18 @@
 #define REXX_VALUE_int8_t                 20
 #define REXX_VALUE_int16_t                21
 #define REXX_VALUE_int32_t                22
+#define REXX_VALUE___int32_t              22  // aliased for FreeBSD/NetBSD
 #define REXX_VALUE_int64_t                23
-#define REXX_VALUE___int64_t              23
+#define REXX_VALUE___int64_t              23  // aliased for FreeBSD/NetBSD
 #define REXX_VALUE_uint8_t                24
 #define REXX_VALUE_uint16_t               25
 #define REXX_VALUE_uint32_t               26
+#define REXX_VALUE___uint32_t             26  // aliased for FreeBSD/NetBSD
 #define REXX_VALUE_uint64_t               27
-#define REXX_VALUE___uint64_t             27  -- aliased
+#define REXX_VALUE___uint64_t             27  // aliased for FreeBSD/NetBSD
 #define REXX_VALUE_intptr_t               28
 #define REXX_VALUE_uintptr_t              29
-#define REXX_VALUE___uintptr_t            29  -- aliased
+#define REXX_VALUE___uintptr_t            29  // aliased for FreeBSD/NetBSD
 #define REXX_VALUE_logical_t              30
 #define REXX_VALUE_RexxArrayObject        31
 #define REXX_VALUE_RexxStemObject         32
@@ -129,7 +131,7 @@
 
 BEGIN_EXTERN_C()
 
-// forward defininitions of the context structure types
+// forward definitions of the context structure types
 struct RexxInstance_;
 #ifdef __cplusplus
 typedef RexxInstance_ RexxInstance;
@@ -234,7 +236,8 @@ typedef struct _RexxMethodEntry
 #define REXX_INTERPRETER_4_2_0  0x00040200
 #define REXX_INTERPRETER_4_3_0  0x00040300
 #define REXX_INTERPRETER_5_0_0  0x00050000
-#define REXX_CURRENT_INTERPRETER_VERSION REXX_INTERPRETER_5_0_0
+#define REXX_INTERPRETER_5_1_0  0x00050100
+#define REXX_CURRENT_INTERPRETER_VERSION REXX_INTERPRETER_5_1_0
 #define NO_VERSION_YET NULL
 
 #define REXX_LANGUAGE_6_03 0x00000603
@@ -273,10 +276,10 @@ END_EXTERN_C()
 // the argument is a "special" virtual argument derived from context
 #define SPECIAL_ARGUMENT  0x02
 
-typedef struct
+typedef struct _ValueDescriptor
 {
 // union containing argument values for each of the passable/returnable
-// types from a method/function call.  The arguments are pass/retrieved
+// types from a method/function call.  The arguments are passed/retrieved
 // using the appropriate type names, which bypasses any endian issues of
 // how different sized values might be stored with a union.
     union
@@ -301,16 +304,18 @@ typedef struct
         int8_t                value_int8_t;
         int16_t               value_int16_t;
         int32_t               value_int32_t;
+        int32_t               value___int32_t;   // aliased for FreeBSD/NetBSD
         int64_t               value_int64_t;
-        int64_t               value___int64_t;
+        int64_t               value___int64_t;   // aliased for FreeBSD/NetBSD
         uint8_t               value_uint8_t;
         uint16_t              value_uint16_t;
         uint32_t              value_uint32_t;
+        uint32_t              value___uint32_t;  // aliased for FreeBSD/NetBSD
         uint64_t              value_uint64_t;
-        uint64_t              value___uint64_t;
+        uint64_t              value___uint64_t;  // aliased for FreeBSD/NetBSD
         intptr_t              value_intptr_t;
         uintptr_t             value_uintptr_t;
-        uintptr_t             value___uintptr_t;
+        uintptr_t             value___uintptr_t; // aliased for FreeBSD/NetBSD
         size_t                value_size_t;
         ssize_t               value_ssize_t;
         RexxArrayObject       value_RexxArrayObject;
@@ -661,6 +666,7 @@ typedef struct
      RexxStringTableObject(RexxEntry *NewStringTable)(RexxThreadContext *);
      logical_t(RexxEntry *IsStringTable)(RexxThreadContext *, RexxObjectPtr);
      RexxObjectPtr(RexxEntry *SendMessageScoped)(RexxThreadContext *, RexxObjectPtr, CSTRING, RexxClassObject, RexxArrayObject);
+     RexxInstance *(RexxEntry *GetInterpreterInstance)(RexxThreadContext *);
 
 } RexxThreadInterface;
 
@@ -1629,6 +1635,12 @@ struct RexxThreadContext_
          functions->ClearCondition(this);
      }
 
+     RexxInstance* GetInterpreterInstance()
+     {
+         return functions->GetInterpreterInstance(this);
+     }
+
+
      RexxObjectPtr Nil()
      {
          return functions->RexxNil;
@@ -2369,6 +2381,10 @@ struct RexxMethodContext_
      {
          threadContext->ClearCondition();
      }
+     RexxInstance* GetInterpreterInstance()
+     {
+         return threadContext->GetInterpreterInstance();
+     }
      void ThrowException0(size_t n)
      {
          functions->ThrowException0(this, n);
@@ -2499,7 +2515,7 @@ struct RexxMethodContext_
 struct RexxCallContext_
 {
      RexxThreadContext *threadContext;   // the interpreter instance state
-     CallContextInterface *functions;    // functions available in a method context
+     CallContextInterface *functions;    // functions available in a call context
      ValueDescriptor *arguments;         // the argument descriptor
 
 #ifdef __cplusplus
@@ -3214,6 +3230,10 @@ struct RexxCallContext_
      void ClearCondition()
      {
          threadContext->ClearCondition();
+     }
+     RexxInstance* GetInterpreterInstance()
+     {
+         return threadContext->GetInterpreterInstance();
      }
      void ThrowException0(size_t n)
      {
@@ -3326,7 +3346,7 @@ struct RexxCallContext_
 struct RexxExitContext_
 {
      RexxThreadContext *threadContext;   // the interpreter instance state
-     ExitContextInterface *functions;    // functions available in a method context
+     ExitContextInterface *functions;    // functions available in an exit context
      ValueDescriptor *arguments;         // the argument descriptor
 
 #ifdef __cplusplus
@@ -4040,6 +4060,10 @@ struct RexxExitContext_
      void ClearCondition()
      {
          threadContext->ClearCondition();
+     }
+     RexxInstance* GetInterpreterInstance()
+     {
+         return threadContext->GetInterpreterInstance();
      }
      void ThrowException0(size_t n)
      {
@@ -4188,18 +4212,20 @@ END_EXTERN_C()
 #define ARGUMENT_TYPE_int8_t                int8_t
 #define ARGUMENT_TYPE_int16_t               int16_t
 #define ARGUMENT_TYPE_int32_t               int32_t
+#define ARGUMENT_TYPE___int32_t             int32_t   // aliased for FreeBSD/NetBSD
 #define ARGUMENT_TYPE_int64_t               int64_t
-#define ARGUMENT_TYPE___int64_t              int64_t
+#define ARGUMENT_TYPE___int64_t             int64_t   // aliased for FreeBSD/NetBSD
 #define ARGUMENT_TYPE_uint8_t               uint8_t
 #define ARGUMENT_TYPE_uint16_t              uint16_t
 #define ARGUMENT_TYPE_uint32_t              uint32_t
+#define ARGUMENT_TYPE___uint32_t            uint32_t  // aliased for FreeBSD/NetBSD
 #define ARGUMENT_TYPE_uint64_t              uint64_t
-#define ARGUMENT_TYPE___uint64_t             uint64_t
+#define ARGUMENT_TYPE___uint64_t            uint64_t  // aliased for FreeBSD/NetBSD
 #define ARGUMENT_TYPE_size_t                size_t
 #define ARGUMENT_TYPE_ssize_t               ssize_t
 #define ARGUMENT_TYPE_intptr_t              intptr_t
 #define ARGUMENT_TYPE_uintptr_t             uintptr_t
-#define ARGUMENT_TYPE___uintptr_t             uintptr_t
+#define ARGUMENT_TYPE___uintptr_t           uintptr_t // aliased for FreeBSD/NetBSD
 #define ARGUMENT_TYPE_logical_t             logical_t
 #define ARGUMENT_TYPE_RexxArrayObject       RexxArrayObject
 #define ARGUMENT_TYPE_RexxStemObject        RexxStemObject

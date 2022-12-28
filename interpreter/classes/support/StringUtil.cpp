@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -662,7 +662,7 @@ int  StringUtil::caselessCompare(const char *string1, const char *string2, size_
     // need to do this the hard way
     while (length--)
     {
-        int rc = toupper(*string1++) - toupper(*string2++);
+        int rc = Utilities::toUpper(*string1++) - Utilities::toUpper(*string2++);
         if (rc != 0)
         {
             return rc < 0 ? -1 : 1;
@@ -1053,7 +1053,7 @@ RexxObject *StringUtil::dataType(RexxString *string, char option )
     const char *scanp = string->getStringData();
 
     // no process each type option
-    switch (toupper(option))
+    switch (Utilities::toUpper(option))
     {
         case RexxString::DATATYPE_ALPHANUMERIC:
             return booleanObject(len != 0 && !validateStrictSet(scanp, RexxString::ALPHANUM_LOOKUP, len));
@@ -1775,10 +1775,10 @@ bool StringUtil::decodeBase64(const char *source, size_t inputLength, char *dest
             if (ch == '=')
             {
                 // if we're looking for the first digit, then the next character
-                // muust also be an '='
+                // must also be an '='
                 if (digit == 2)
                 {
-                    if (inputLength < 2 || *source != '=')
+                    if (inputLength == 0 || *source != '=')
                     {
                         return false;
                     }

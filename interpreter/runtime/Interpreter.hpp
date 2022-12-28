@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -36,13 +36,11 @@
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*****************************************************************************/
-/* REXX Windows Support                                                      */
 /*                                                                           */
 /* Main interpreter control.  This is the preferred location for all         */
 /* platform independent global variables.                                    */
 /* The interpreter does not instantiate an instance of this                  */
 /* class, so most variables and methods should be static.                    */
-/*                                                                           */
 /*                                                                           */
 /*****************************************************************************/
 
@@ -51,6 +49,7 @@
 
 #include "RexxCore.h"
 #include "SysSemaphore.hpp"
+
 
 class InterpreterInstance;
 class ListClass;
@@ -99,6 +98,7 @@ public:
     static InterpreterInstance *createInterpreterInstance(RexxOption *options);
     static inline InterpreterInstance *createInterpreterInstance() { return createInterpreterInstance(NULL); }
     static bool terminateInterpreterInstance(InterpreterInstance *instance);
+    static bool isInstanceActive(InterpreterInstance *instance);
     static RexxString *getVersionString();
     static void initLocal();
     static size_t getInterpreterVersion();
@@ -132,6 +132,10 @@ public:
     static RexxString* qualifyFileSystemName(RexxString *name);
 
 protected:
+
+    // IMPORTANT NOTE: To avoid deadlocks, never request the kernel lock while holding the resourceLock,
+    // otherwise deadlocks are possible. It is permissible to request the resource lock while holding the
+    // kernel lock, but this ordering must be strictly observed.
     static SysMutex  resourceLock;   // use to lock resources accessed outside of kernel global lock
     static SysMutex  dispatchLock;   // use to lock when manipulating the activity dispatch queue
     static int    initializations;   // indicates whether we're terminated or not

@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -110,7 +110,7 @@ RexxReturnCode RexxEntry RexxCreateQueue(
             // must be at least big enough for the requested name
             if (strlen(userRequested) >= size)
             {
-                throw new ServiceException(MEMORY_ERROR, "Unsufficient space for created queue name");
+                throw new ServiceException(MEMORY_ERROR, "Insufficient space for created queue name");
             }
         }
         return lam->queueManager.createNamedQueue(userRequested, size, name, pdup);
@@ -276,7 +276,7 @@ RexxReturnCode RexxEntry RexxAddQueue(
                                              /* first check the flag       */
         if (flag != RXQUEUE_FIFO && flag != RXQUEUE_LIFO)
         {
-            return RXQUEUE_BADWAITFLAG;
+            return RXQUEUE_PRIORITY;
         }
         if (lam->queueManager.isSessionQueue(name))
         {
@@ -368,6 +368,7 @@ RexxReturnCode RexxEntry RexxCreateSessionQueue()
     // this will initialize the API subsystem
     ENTER_REXX_API(QueueManager)
     {
+        (void)lam; // avoid warning: unused variable 'lam' [-Wunused-variable]
         return 0;
     }
     EXIT_REXX_API();

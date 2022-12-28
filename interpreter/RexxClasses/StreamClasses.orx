@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -160,7 +160,7 @@ notready:
 
                                      /* get as a string                   */
   stream_name = stream_name~request('STRING')
-  if stream_name~isNil then          /* not a real string value?          */
+  if stream_name == .nil then        /* not a real string value?          */
     raise syntax 93.938 array (1)    /* this is an error                  */
   self~!c_stream_init(stream_name)   /* initialize the stream block       */
                                      /* upper case the name               */
@@ -211,29 +211,27 @@ notready:                              /* standard notready handler         */
 ::METHOD  makearray                    /* arrayin method                    */
   forward message 'ARRAYIN'
 
-::METHOD  arrayin                      /* stream makearray method           */
-  use strict arg type='LINES'
-  signal on notready                   /* the notready handler              */
+::METHOD  arrayIn                      -- Stream arrayIn method
+  use strict arg type = "LINES"
 
-  type = type~left(1)~upper
-  if type == 'L' then                  /* line type operation?              */
-      linein = 1                       /* set the line flag                 */
-  else if type == 'C' then             /* character operation?              */
-      linein = 0                       /* not a line operation              */
+  if type~caselessStartsWith("L") then
+      linein = 1                       -- line operation
+  else if type~caselessStartsWith("C") then
+      linein = 0                       -- character operation
   else
-      raise syntax 93                  /* raise an error                    */
+      raise syntax 93.915 array ("CL", type)
 
-  array = .array~new                   -- we work directly on an array
-
-  signal on notready                   -- the notready trap is a better means of
-                                       -- handling this.
   if linein then do
+      array = .array~new(self~lines)
       -- delegate this to the native method, which will trigger a notready
       -- when done reading.  It will fill in values as it goes.
+      signal on notready
       self~line_arrayin(array)
   end
   else do
-      do forever
+      array = .Array~new(self~chars)
+      signal on notready
+      loop
           array~append(self~charin)
       end
   end
@@ -257,10 +255,16 @@ notready:
 
   select                               /* process each command              */
     when command_word = 'CLOSE' then
-      return self~close
+      if parms = "" then
+        return self~close
+      else
+        raise syntax 93                -- CLOSE cannot have parms
 
     when command_word = 'FLUSH' then
-      return self~flush
+      if parms = "" then
+        return self~flush
+      else
+        raise syntax 93                -- FLUSH cannot have parms
 
     when command_word = 'OPEN' then
       return self~open(parms)
@@ -293,7 +297,7 @@ notready:                              /* standard notready handler         */
   parse value ' DATETIME EXISTS HANDLE POSITION SEEK SIZE STREAMTYPE TIMESTAMP' with (subcommand) +1 subcommand .
   select
                                        /* need the date and time?           */
-    when subcommand = 'DATETIME' then do
+    when subcommand = 'DATETIME', parms = '' then do
                                        /* transient style stream?           */
       if self~!query_streamtype = 'TRANSIENT' then
         return ''                      /* this doesn't have a date          */
@@ -309,10 +313,10 @@ notready:                              /* standard notready handler         */
       return ''                        /* no time, just return a null string*/
     end
                                        /* query the existence               */
-    when subcommand = 'EXISTS' then
+    when subcommand = 'EXISTS', parms = '' then
       return self~!query_exists        /* just check to see                 */
                                        /* get the file handle               */
-    when subcommand = 'HANDLE' then do
+    when subcommand = 'HANDLE', parms = '' then do
       return self~!query_handle        /* return the file handle            */
     end
                                        /* position or seek?                 */
@@ -321,14 +325,14 @@ notready:                              /* standard notready handler         */
       return self~!query_position(parms)
     end
                                        /* get the size                      */
-    when subcommand = 'SIZE' then
+    when subcommand = 'SIZE', parms = '' then
       return self~!query_size          /* go ask for it                     */
                                        /* asking for the stream type?       */
-    when subcommand = 'STREAMTYPE' then
+    when subcommand = 'STREAMTYPE', parms = '' then
       return self~!query_streamtype    /* just return the type              */
 
                                        /* asking for a timestamp?           */
-    when subcommand = 'TIMESTAMP' then do
+    when subcommand = 'TIMESTAMP', parms = '' then do
                                        /* have a transient stream?          */
       if self~!query_streamtype = 'TRANSIENT' then
         return ''                      /* no time stamp possible            */
@@ -441,10 +445,12 @@ return position
 ::METHOD init
   expose named_queue
   use strict arg name_queue = "SESSION"
+  -- if .nil create a queue with a unique system-generated name
+  if name_queue == .nil then
+      name_queue = self~class~create
   named_queue = name_queue~upper
-  if named_queue \= 'SESSION' then do
+  if named_queue \= "SESSION" then
       self~class~open(named_queue)
-  end
   self~objectname = named_queue        /* and also set as an object name    */
 
 ::METHOD get unguarded                 /* get the queue name                */
@@ -465,9 +471,7 @@ return position
 ::method delete
   expose named_queue
   use strict arg                       /* enforce no argument               */
-  if named_queue \= 'SESSION' then do
-      self~class~delete(named_queue)
-  end
+  return self~class~delete(named_queue)
 
 ::METHOD lineout
   forward message 'QUEUE'
@@ -481,7 +485,7 @@ return position
   arr = .array~new(qItems)
   do i = 1 to qItems
      line = self~pull
-     if line~isNil /* items have been removed by another thread or process */
+     if line == .nil /* items have been removed by another thread or process */
      then do
         arr = arr~section(1, i - 1)
         leave
@@ -515,7 +519,7 @@ return position
   use strict arg path, dir = .nil
   qualifiedPath = .nil
 
-  if dir~isNil then do
+  if dir == .nil then do
       -- if we don't have a path, then we can't do a lazy
       -- qualification because the current directory might
       -- change.  We need to process everything
@@ -539,14 +543,16 @@ return position
       end
   end
 
--- support the query methods as both instance and class methods
-::METHOD separator CLASS EXTERNAL 'LIBRARY REXX file_separator'
-::METHOD pathSeparator CLASS EXTERNAL 'LIBRARY REXX file_path_separator'
+::method getSeparator private class external "LIBRARY REXX file_separator"
+::method getPathSeparator private class external "LIBRARY REXX file_path_separator"
+::constant separator (.File~getSeparator)
+::constant pathSeparator (.File~getPathSeparator)
+
 ::METHOD isCaseSensitive CLASS EXTERNAL 'LIBRARY REXX file_case_sensitive'
 ::METHOD listRoots CLASS EXTERNAL 'LIBRARY REXX file_list_roots'
 ::METHOD searchPathImpl CLASS PRIVATE EXTERNAL 'LIBRARY REXX file_search_path_impl'
 ::method searchPath CLASS
-  use strict arg file, pathList
+  use strict arg file, pathList = (value("PATH", , "ENVIRONMENT"))
 
   path = .mutableBuffer~new
 
@@ -571,9 +577,6 @@ return position
 
   return file
 
-::METHOD separator EXTERNAL 'LIBRARY REXX file_separator'
-::METHOD pathSeparator EXTERNAL 'LIBRARY REXX file_path_separator'
-
 -- Normalize the path separator syntax for a new File instance
 ::METHOD normalizePathSyntax PRIVATE
   use strict arg path
@@ -591,11 +594,16 @@ return position
   end
 
   -- the last name element should not end with a separator
-  -- remove it if one is there, but keep "d:\" or a single "/" as-is
-  if buffer[2] == ":" then
-      minimum = 3
+  -- remove it if one is there, but keep d:\ or \\?\ or \\.\
+  -- or \\?\C:\ or a single "/" as-is
+  if separator == "\", buffer~matchChar(2, ":")
+      then minimum = 3
   else
-      minimum = 1
+      -- is this \\?\C:\ or \\.\ Win32 file/device name space?
+      if separator == "\", buffer~startsWith("\\"), buffer~matchChar(3, "?.")
+          then minimum = buffer~matchChar(6, ":")~?(7, 4)
+          else minimum = 1
+
   do while buffer~length > minimum, buffer~endsWith(separator)
       buffer~delstr(buffer~length, 1)
   end
@@ -612,27 +620,20 @@ return position
   separator = self~separator
 
   -- remove leading separators from the name, if there are any
-  firstNonSep = name~verify(separator)
-
-  if firstNonSep > 1 then do
-      name = name~substr(firstNonSep)
-  end
+  name = name~strip("L", separator)
 
   -- the normalization process has removed trailing separators, except for
-  -- the case where the dir is a root specification, / or d:/
-
-  if dir~endsWith(separator) then do
+  -- the case where dir is a root specification
+  if dir~endsWith(separator) then
       return dir || name
-  end
-  else do
+  else
       return dir || separator || name
-  end
 
 -- get the qualified path for this File instance
 ::METHOD qualifiedPath PRIVATE
   expose path qualifiedPath
 
-  if qualifiedPath~isNil then do
+  if qualifiedPath == .nil then do
       qualifiedPath = self~qualifyImpl(path)
   end
 
@@ -722,25 +723,74 @@ return position
       return path~substr(sep + 1)
   end
 
--- extract the parent directory portion of this file
-::METHOD parent
+-- returns the extension, everything after the last dot in the name.
+::METHOD extension
   use strict arg
   path = self~qualifiedPath
 
-  sep = path~lastPos(self~separator)
-  -- if no separator is found or the qualified name ends with a
-  -- separator (which means this is a root element), then return
-  -- .nil
-  if sep == 0 | path~match(path~length, self~separator) then do
-      return .nil
+  name = path~substr(path~lastPos(self~separator) + 1)
+  -- we search the name portion of the path for the last dot
+  dot = name~lastPos(".")
+  if dot == 0 then
+      return ""
+  else
+      return name~substr(dot + 1)
+
+-- extract the parent directory portion of this file
+-- expected parent processing results are:
+--   /dir/file -> /dir -> / -> .nil
+--   d:\dir\file -> d:\dir -> d:\ -> .nil
+--   \\server\share\dir\file -> \\server\share\dir -> \\server\share -> .nil
+--   \\?\d:\dir\file -> \\?\d:\dir -> \\?\d:\ -> .nil
+--   \\.\nul -> \\.\ -> .nil
+::METHOD parent
+  use strict arg
+  path = self~qualifiedPath
+  separator = self~separator
+
+  -- all roots have a trailing separator, except \\server\share
+  rootSeparator = .true -- assume our root has a trailing separator
+
+  if path~startsWith("\\"), separator == "\" then do
+    -- on Windows paths starting with \\ get special treatment
+    if path~matchChar(3, "?.") then do
+      -- this is the Win32 file/device namespace
+      -- e. g. \\?\ or \\?\C:\ or \\.\
+      root = path~matchChar(6, ":")~?(7, 4)
+    end
+    else do
+      -- this is the Windows \\server\share\dir form
+      -- the root part is everything up to the 4th backslash
+      root = path~pos("\", 3)
+      if root > 0
+        then root = path~pos("\", root + 1)
+      if root = 0 then
+        -- we don't have two more backslashes, so this is already root
+        return .nil
+      rootSeparator = .false -- special case: no trailing separator
+    end
+  end
+  else do
+    -- this is the standard Unix /dir/file or Windows NT namespace d:\dir form
+    -- the root part is either 1 character (/) or 3 characters (d:\)
+    root = (separator == "/")~?(1, 3)
   end
 
-  return path~substr(1, sep - 1)
+  sep = path~lastPos(separator)
+  if sep > root then
+    -- if a separator is found beyond the root part, return the part up
+    -- to this separator
+    return path~left(sep - 1)
+  else
+    -- if there is no such separator but the qualified path is longer
+    -- than the root part, return the root part only
+    -- otherwise return .nil
+    return (path~length > root)~?(path~left(root- rootSeparator~?(0, 1)), .nil)
 
 ::METHOD parentFile
   use strict arg
   parent = self~parent
-  if parent~isNil then
+  if parent == .nil then
       return .nil
 
   return self~class~new(parent)
@@ -791,7 +841,7 @@ return position
 
   .Validate~classType("date", date, .DateTime)
 
-  self~setLastModifiedImpl(self~qualifiedPath, date~fullDate)
+  return self~setLastModifiedImpl(self~qualifiedPath, date~fullDate)
 
 ::ATTRIBUTE lastAccessed GET
   use strict arg
@@ -809,7 +859,7 @@ return position
 
   .Validate~classType("date", date, .DateTime)
 
-  self~setLastAccessedImpl(self~qualifiedPath, date~fullDate)
+  return self~setLastAccessedImpl(self~qualifiedPath, date~fullDate)
 
 ::METHOD lengthImpl PRIVATE EXTERNAL 'LIBRARY REXX file_length'
 
@@ -828,7 +878,7 @@ return position
   use strict arg
 
   names = self~list
-  if names~isNil then
+  if names == .nil then
       return .nil
 
   files = .array~new(names~items)
@@ -860,7 +910,7 @@ return position
 
   -- we might be at the top level already
   parent = self~parentFile
-  if parent~isNil then
+  if parent == .nil then
       return .false
   -- try to create the parent directories first
   if \parent~makeDirs then
@@ -881,4 +931,8 @@ return position
   expose path
   use strict arg
   return path
+
+::method makeString
+  use strict arg
+  forward message "QUALIFIEDPATH"
 

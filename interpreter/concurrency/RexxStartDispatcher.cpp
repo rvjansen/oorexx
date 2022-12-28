@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -123,7 +123,7 @@ void RexxStartDispatcher::run()
     // if not an instore request, we load this from a file.
     if (instore == NULL)
     {
-        fullname = activity->resolveProgramName(name, OREF_NULL, OREF_NULL);
+        fullname = activity->resolveProgramName(name, OREF_NULL, OREF_NULL, RESOLVE_DEFAULT);
         if (fullname == OREF_NULL)
         {
             reportException(Error_Program_unreadable_notfound, name);
@@ -193,6 +193,8 @@ void RexxStartDispatcher::handleError(wholenumber_t r, DirectoryClass *c)
     // use the base error handling and set our return code to the negated error code.
     ActivityDispatcher::handleError(-r, c);
     retcode = (short)rc;
+    // in case there are errors trying to display
+    activation->enableConditionTraps();
     // process the error to display the error message.
     activity->error(activation, conditionData);
 }
@@ -225,7 +227,7 @@ void CallProgramDispatcher::run()
 {
     RexxString *targetName = new_string(program);
     //we are resolving from a program name
-    RexxString *name = activity->resolveProgramName(targetName, OREF_NULL, OREF_NULL);
+    RexxString *name = activity->resolveProgramName(targetName, OREF_NULL, OREF_NULL, RESOLVE_DEFAULT);
     if (name == OREF_NULL)
     {
         reportException(Error_Program_unreadable_notfound, targetName);

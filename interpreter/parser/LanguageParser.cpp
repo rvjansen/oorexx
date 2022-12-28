@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -81,6 +81,9 @@
 #include "VariableReferenceOp.hpp"
 
 
+const char *ENCODED_NEEDLE = "/**/@REXX@";   // from ProgramMetaData.cpp
+
+
 /**
  * Static method for creating a new MethodClass instance.
  *
@@ -94,6 +97,21 @@
  */
 MethodClass *LanguageParser::createMethod(RexxString *name, ArrayClass *source, PackageClass *sourceContext)
 {
+    // check whether the data is representing an encoded compiled Rexx program (rexxc with the '/e' switch),
+    // i.e. the second entry consists of the string "/**/@REXX@" only;
+    if (source->items()>1 && source->get(2)->stringValue()->strCompare(ENCODED_NEEDLE))
+    {
+        Protected<RexxString> strSource=source->toString(GlobalNames::LINES, GlobalNames::LINEFEED);  // use single LF for concatenation
+        Protected<BufferClass> program_buffer = new_buffer(strSource->getStringData(), strSource->getLength());
+
+        // try to restore a compiled and encoded program first
+        Protected<MethodClass> method = MethodClass::restore(name, program_buffer);
+        if (method != (MethodClass *)OREF_NULL)
+        {
+            return method;
+        }
+    }
+
     // create the appropriate array source, then the parser, then generate the
     // code.
     Protected<ProgramSource> programSource = new ArrayProgramSource(source);
@@ -136,9 +154,28 @@ MethodClass *LanguageParser::createMethod(RexxString *name, BufferClass *source)
  */
 MethodClass *LanguageParser::createMethod(RexxString *name, PackageClass *sourceContext)
 {
+    // load the file into a buffer
+    Protected<BufferClass> program_buffer = FileProgramSource::readProgram(name->getStringData());
+    // if this failed, report an error now.
+    if (program_buffer == (BufferClass *)OREF_NULL)
+    {
+        reportException(Error_Program_unreadable_name, name);
+    }
+
+    // try to restore a flattened program first
+    Protected<MethodClass> method = MethodClass::restore(name, program_buffer);
+    if (method != (MethodClass *)OREF_NULL)
+    {
+        // method->setPackageObject(sourceContext);
+        // method->getPackage()->addPackage(sourceContext);
+        // method->getPackage()->inheritPackageContext(sourceContext);
+        // method->getPackage()->install();
+        return method;
+    }
+
     // create the appropriate program source, then the parser, then generate the
     // code.
-    Protected<ProgramSource> programSource = new FileProgramSource(name);
+    Protected<ProgramSource> programSource = new BufferProgramSource(program_buffer);
     Protected<LanguageParser> parser = new LanguageParser(name, programSource);
     return parser->generateMethod(sourceContext);
 }
@@ -157,6 +194,21 @@ MethodClass *LanguageParser::createMethod(RexxString *name, PackageClass *source
  */
 RoutineClass *LanguageParser::createRoutine(RexxString *name, ArrayClass *source, PackageClass *sourceContext)
 {
+    // check whether the data is representing an encoded compiled Rexx program (rexxc with the '/e' switch),
+    // i.e. the second entry consists of the string "/**/@REXX@" only;
+    if (source->items()>1 && source->get(2)->stringValue()->strCompare(ENCODED_NEEDLE))
+    {
+        Protected<RexxString> strSource=source->toString(GlobalNames::LINES, GlobalNames::LINEFEED);  // use single LF for concatenation
+        Protected<BufferClass> program_buffer = new_buffer(strSource->getStringData(), strSource->getLength());
+
+        // try to restore a compiled and encoded program first
+        Protected<RoutineClass> routine = RoutineClass::restore(name, program_buffer);
+        if (routine != (RoutineClass *)OREF_NULL)
+        {
+            return routine;
+        }
+    }
+
     // create the appropriate array source, then the parser, then generate the
     // code.
     Protected<ProgramSource> programSource = new ArrayProgramSource(source);
@@ -261,6 +313,21 @@ RoutineClass* LanguageParser::createProgram(RexxString *name, BufferClass *sourc
  */
 RoutineClass* LanguageParser::createProgram(RexxString *name, ArrayClass *source, PackageClass *sourceContext)
 {
+    // check whether the data is representing an encoded compiled Rexx program (rexxc with the '/e' switch),
+    // i.e. the second entry consists of the string "/**/@REXX@" only;
+    if (source->items()>1 && source->get(2)->stringValue()->strCompare(ENCODED_NEEDLE))
+    {
+        Protected<RexxString> strSource=source->toString(GlobalNames::LINES, GlobalNames::LINEFEED);  // use single LF for concatenation
+        Protected<BufferClass> program_buffer = new_buffer(strSource->getStringData(), strSource->getLength());
+
+        // try to restore a compiled and encoded program first
+        Protected<RoutineClass> routine = RoutineClass::restore(name, program_buffer);
+        if (routine != (RoutineClass *)OREF_NULL)
+        {
+            return routine;
+        }
+    }
+
     // create the appropriate array source, then the parser, then generate the
     // code.
     Protected<ProgramSource> programSource = new ArrayProgramSource(source);
@@ -381,7 +448,8 @@ RexxCode *LanguageParser::translateInterpret(RexxString *interpretString, Packag
     // create the appropriate array source, then the parser, then generate the
     // code.
     ProgramSource *programSource = new ArrayProgramSource(new_array(interpretString), lineNumber);
-    Protected<LanguageParser> parser = new LanguageParser(GlobalNames::NULLSTRING, programSource);
+    // the package for the interpret will inherit the program name from the parent context.
+    Protected<LanguageParser> parser = new LanguageParser(sourceContext->getProgramName(), programSource);
     return parser->translateInterpret(sourceContext, labels);
 }
 
@@ -1207,7 +1275,7 @@ RexxCode *LanguageParser::translateBlock()
         }
         // validate allowed instructions in a SELECT
         if (topDoIsType(KEYWORD_SELECT, KEYWORD_SELECT_CASE) &&
-            (type != KEYWORD_WHEN && type != KEYWORD_WHEN_CASE && type != KEYWORD_OTHERWISE && type != KEYWORD_END ))
+            (type != KEYWORD_WHEN && type != KEYWORD_WHEN_CASE && type != KEYWORD_OTHERWISE && type != KEYWORD_END))
         {
             syntaxError(Error_When_expected_whenotherwise, topDo());
         }
@@ -1231,7 +1299,7 @@ RexxCode *LanguageParser::translateBlock()
                 }
             }
 
-            // processing of an IF instruction, and also a WHEN (from above)
+                // processing of an IF instruction, and also a WHEN (from above)
             case  KEYWORD_IF:
             {
                 // we need to finish the IF instruction.
@@ -1316,7 +1384,7 @@ RexxCode *LanguageParser::translateBlock()
                 continue;
             }
 
-            // we have an ELSE instruction.  Need to verify this is in a correct context.
+                // we have an ELSE instruction.  Need to verify this is in a correct context.
             case  KEYWORD_ELSE:
             {
                 // ok, the top instruction is the key.  It must be the
@@ -1365,8 +1433,8 @@ RexxCode *LanguageParser::translateBlock()
             }
 
 
-            // found the start of an OTHERWISE group.  We need to verify that
-            // we're really working on a SELECT.
+                // found the start of an OTHERWISE group.  We need to verify that
+                // we're really working on a SELECT.
             case  KEYWORD_OTHERWISE:
             {
                 // we must have a SELECT at the top of the control stack
@@ -1396,8 +1464,8 @@ RexxCode *LanguageParser::translateBlock()
                 break;
             }
 
-            // An END instruction.  This could the the closure for a DO, LOOP, or SELECT.
-            // its matchup should be on the top of the control stack.
+                // An END instruction.  This could the the closure for a DO, LOOP, or SELECT.
+                // its matchup should be on the top of the control stack.
             case  KEYWORD_END:
             {
                 // ok, pop the top instruction.  If this is the
@@ -1454,9 +1522,9 @@ RexxCode *LanguageParser::translateBlock()
                 break;
             }
 
-            // start of new DO group (also picks up LOOP instruction)
-            // this gets pushed on to the top of the control stack until
-            // we find an END instruction.
+                // start of new DO group (also picks up LOOP instruction)
+                // this gets pushed on to the top of the control stack until
+                // we find an END instruction.
             case KEYWORD_DO:
             case KEYWORD_LOOP:
             case KEYWORD_SIMPLE_BLOCK:
@@ -1486,8 +1554,8 @@ RexxCode *LanguageParser::translateBlock()
                 break;
             }
 
-            // new select group.  Again, we push this on the start of the stack
-            // while it awaits its associated WHEN, OTHERWISE, and END bits.
+                // new select group.  Again, we push this on the start of the stack
+                // while it awaits its associated WHEN, OTHERWISE, and END bits.
             case  KEYWORD_SELECT:
             case  KEYWORD_SELECT_CASE:
             {
@@ -1495,7 +1563,7 @@ RexxCode *LanguageParser::translateBlock()
                 break;
             }
 
-            // all other types of instructions don't require additional processing.
+                // all other types of instructions don't require additional processing.
             default:
                 break;
         }
@@ -1517,16 +1585,55 @@ RexxCode *LanguageParser::translateBlock()
         labels = OREF_NULL;
     }
 
-    // a code block need not have any instructions, so only grab
-    // the location information if we have anything.  Otherwise, this will be
-    // all zeros.
-    if (firstInstruction != OREF_NULL)
+    // a code block need not have any instructions, and it may have leading or
+    // trailing blanks. The source block started at the very beginning, now we need
+    // find out the location of whatever terminated the block, which will be either
+    // a directive clause that has already been parsed or actual end of the source itself.
+    // if this block was terminated by discovering another directive, then
+    // we set the end of this block to just before
+    if (clause != OREF_NULL)
     {
-        // we already set the start, now get the end.
-        SourceLocation endLocation = lastInstruction->getLocation();
-        // set the end location
-        blockLocation.setEnd(endLocation);
+        // get the next clause. If this clause starts at the beginning of
+        // a line (common), then we need to use the end of the previous line as the
+        // end location.
+        SourceLocation nextLocation = clause->getLocation();
+        if (nextLocation.getOffset() == 0)
+        {
+            size_t previousLine = nextLocation.getLineNumber() - 1;
+            // this might actually have stepped things back a tick if there truly
+            // was nothing there. In that case, set the source location to zero to indicate
+            // there was nothing there
+            if (blockLocation.getLineNumber() > previousLine)
+            {
+                blockLocation.setLineNumber(0);
+            }
+            else
+            {
+                // we need this to be the end of the previous line
+                const char *data = NULL;
+                size_t lineLength = 0;
+
+                source->getLine(previousLine, data, lineLength);
+                blockLocation.setEnd(previousLine, lineLength);
+            }
+        }
+        // we can just set the end to the beginning of the pending clause
+        else
+        {
+            blockLocation.setEnd(nextLocation.getLineNumber(), nextLocation.getOffset());
+        }
     }
+    // no active clause, so we set this to the very end of the file
+    else
+    {
+        // we need this to be the end of the previous line
+        const char *data = NULL;
+        size_t lineLength = 0;
+
+        source->getLine(source->getLineCount(), data, lineLength);
+        blockLocation.setEnd(source->getLineCount(), lineLength);
+    }
+
 
     // now create a code object that is attached to the package.
     // this will have all of the information needed to execute this code.
@@ -3920,7 +4027,7 @@ ArrayClass  *LanguageParser::words(RexxString *string)
     // now make commonstring versions of the rest of the words
     for (size_t i = 2; i <= count; i++)
     {
-        wordArray->put(commonString(((RexxString *)wordArray->get(1))), 1);
+        wordArray->put(commonString(((RexxString *)wordArray->get(i))), i);
     }
 
     return wordArray;
@@ -3982,7 +4089,7 @@ void LanguageParser::errorPosition(RexxErrorCodes errorcode, RexxToken *token )
 {
     SourceLocation tokenLocation = token->getLocation();
 
-    ActivityManager::currentActivity->raiseException(errorcode, OREF_NULL, new_array(new_integer(tokenLocation.getOffset()), new_integer(tokenLocation.getLineNumber())), OREF_NULL);
+    ActivityManager::currentActivity->raiseException(errorcode, OREF_NULL, new_array(new_integer(tokenLocation.getOffset() + 1), new_integer(tokenLocation.getLineNumber())), OREF_NULL);
 }
 
 
@@ -4076,6 +4183,12 @@ void LanguageParser::blockError(RexxInstruction *instruction)
         case KEYWORD_LOOP_COUNT_WHILE:
         case KEYWORD_LOOP_WHILE:
         case KEYWORD_LOOP_UNTIL:
+        case KEYWORD_LOOP_WITH:
+        case KEYWORD_LOOP_WITH_UNTIL:
+        case KEYWORD_LOOP_WITH_WHILE:
+        case KEYWORD_LOOP_WITH_FOR:
+        case KEYWORD_LOOP_WITH_FOR_UNTIL:
+        case KEYWORD_LOOP_WITH_FOR_WHILE:
             syntaxError(Error_Incomplete_do_loop, instruction);
             break;
 

@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -130,6 +130,7 @@ NativeActivation::NativeActivation(Activity *_activity)
 void NativeActivation::live(size_t liveMark)
 {
     memory_mark(previous);
+    memory_mark(code);
     memory_mark(executable);
     memory_mark(argArray);
     memory_mark(receiver);
@@ -140,6 +141,7 @@ void NativeActivation::live(size_t liveMark)
     memory_mark(saveList);
     memory_mark(result);
     memory_mark(objectVariables);
+    memory_mark(conditionName);
     memory_mark(conditionObj);
     memory_mark(securityManager);
 
@@ -160,6 +162,7 @@ void NativeActivation::live(size_t liveMark)
 void NativeActivation::liveGeneral(MarkReason reason)
 {
     memory_mark_general(previous);
+    memory_mark_general(code);
     memory_mark_general(executable);
     memory_mark_general(argArray);
     memory_mark_general(receiver);
@@ -170,6 +173,7 @@ void NativeActivation::liveGeneral(MarkReason reason)
     memory_mark_general(saveList);
     memory_mark_general(result);
     memory_mark_general(objectVariables);
+    memory_mark_general(conditionName);
     memory_mark_general(conditionObj);
     memory_mark_general(securityManager);
 
@@ -462,14 +466,14 @@ void NativeActivation::processArguments(size_t _argcount, RexxObject **_arglist,
 
                         case REXX_VALUE_CSTRING:
                         {
-                            descriptors[outputIndex].value.value_CSTRING = cstring(argument);
+                            descriptors[outputIndex].value.value_CSTRING = cstring(argument, inputIndex + 1);
                             break;
                         }
 
                         case REXX_VALUE_RexxStringObject:
                         {
                             // force to a string value
-                            RexxString *temp = stringArgument(argument, inputIndex + 1) ;
+                            RexxString *temp = stringArgument(argument, inputIndex + 1);
                             // if this forced a string object to be created,
                             // we need to protect it here.
                             if (temp != argument)
@@ -483,7 +487,7 @@ void NativeActivation::processArguments(size_t _argcount, RexxObject **_arglist,
 
                         case REXX_VALUE_RexxArrayObject:
                         {
-                            ArrayClass *temp = arrayArgument(argument, inputIndex + 1) ;
+                            ArrayClass *temp = arrayArgument(argument, inputIndex + 1);
                             // if this forced a string object to be created,
                             // we need to protect it here.
                             if (temp != argument)
@@ -1069,13 +1073,13 @@ bool NativeActivation::objectToValue(RexxObject *o, ValueDescriptor *value)
 
         case REXX_VALUE_CSTRING:
         {
-            value->value.value_CSTRING = cstring(o);
+            value->value.value_CSTRING = cstring(o, 1);
             return true;
         }
 
         case REXX_VALUE_RexxStringObject:
         {
-            RexxString *temp = stringArgument(o, 1) ;
+            RexxString *temp = stringArgument(o, 1);
             // if this forced a string object to be created,
             // we need to protect it here.
             if (temp != o)
@@ -1089,7 +1093,7 @@ bool NativeActivation::objectToValue(RexxObject *o, ValueDescriptor *value)
 
         case REXX_VALUE_RexxArrayObject:
         {
-            ArrayClass *temp = arrayArgument(o, 1) ;
+            ArrayClass *temp = arrayArgument(o, 1);
             // if this forced a new object to be created,
             // we need to protect it here.
             if (temp != o)
@@ -1124,7 +1128,7 @@ bool NativeActivation::objectToValue(RexxObject *o, ValueDescriptor *value)
                 return false;
             }
 
-            RexxString *temp = stringArgument(o, 1) ;
+            RexxString *temp = stringArgument(o, 1);
             // if this forced a string object to be created,
             // we need to protect it here.
             if (temp != o)
@@ -1235,6 +1239,16 @@ void NativeActivation::removeLocalReference(RexxInternalObject *objr)
             }
         }
     }
+}
+
+
+/**
+ * Clear out the local reference table for a NativeActivation
+ */
+void NativeActivation::clearLocalReferences()
+{
+    firstSavedObject = OREF_NULL;
+    saveList = OREF_NULL;
 }
 
 
@@ -2011,11 +2025,11 @@ uint64_t NativeActivation::unsignedInt64Value(RexxObject *o, size_t position)
  *
  * @return The CSTRING version of the object.
  */
-const char *NativeActivation::cstring(RexxObject *object)
+const char *NativeActivation::cstring(RexxObject *object, size_t position)
 {
     // force to a string value, making sure to protect the string
     // if a different object is returned.
-    RexxString *string = (RexxString *)object->stringValue();
+    RexxString *string = stringArgument(object, position);
     if (string != object)
     {
         createLocalReference(string);
@@ -2472,7 +2486,7 @@ RexxObject *NativeActivation::guardOnWhenUpdated(const char *name)
         return OREF_NULL;
     }
     // now use this to set the inform status on the variable
-    retriever->setGuard(objectVariables);
+    retriever->setGuard(methodVariables());
     // clear the guard sem on the activity
     activity->guardSet();
     // our desired state is to have the guard, so set it now. The wait will release it and
@@ -2483,7 +2497,7 @@ RexxObject *NativeActivation::guardOnWhenUpdated(const char *name)
     guardWait();
 
     // retrieve the value
-    return retriever->getRealValue(methodVariables());
+    return retriever->getRealValue(objectVariables);
 }
 
 
@@ -2514,7 +2528,7 @@ RexxObject *NativeActivation::guardOffWhenUpdated(const char *name)
         return OREF_NULL;
     }
     // now use this to set the inform status on the variable
-    retriever->setGuard(objectVariables);
+    retriever->setGuard(methodVariables());
     // clear the guard sem on the activity
     activity->guardSet();
     // our desired state is to have the guard off, so set it now.
@@ -2524,7 +2538,7 @@ RexxObject *NativeActivation::guardOffWhenUpdated(const char *name)
     guardWait();
 
     // retrieve the value
-    return retriever->getRealValue(methodVariables());
+    return retriever->getRealValue(objectVariables);
 }
 
 

@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -212,7 +212,7 @@ class RexxActivation : public ActivationBase
    RexxObject      * internalCallTrap(RexxString *, RexxInstruction *, DirectoryClass *, ProtectedObject &);
    bool              callMacroSpaceFunction(RexxString *, RexxObject **, size_t, RexxString *, int, ProtectedObject &);
    static RoutineClass* getMacroCode(RexxString *macroName);
-   RexxString       *resolveProgramName(RexxString *name);
+   RexxString       *resolveProgramName(RexxString *name, ResolveType type);
    RexxClass        *findClass(RexxString *name);
    RexxObject       *resolveDotVariable(RexxString *name, RexxObject *&);
    void              command(RexxString *, RexxString *, CommandIOConfiguration *config);
@@ -357,6 +357,7 @@ class RexxActivation : public ActivationBase
    inline void              clearTraceSettings() { settings.packageSettings.traceSettings.setTraceOff(); settings.intermediateTrace = false; }
    inline bool              tracingResults() {return settings.packageSettings.traceSettings.tracingResults(); }
    inline bool              tracingAll() {return settings.packageSettings.traceSettings.tracingAll(); }
+   inline bool              tracingLabels() {return settings.packageSettings.traceSettings.tracingLabels(); }
    inline bool              inDebug() { return settings.packageSettings.traceSettings.isDebug() && !debugPause;}
    inline void              traceResult(RexxObject * v) { if (tracingResults()) traceValue(v, TRACE_PREFIX_RESULT); };
    inline void              traceKeywordResult(RexxString *k, RexxObject *v) { if (tracingResults()) traceTaggedValue(TRACE_PREFIX_KEYWORD, NULL, true, k, VALUE_MARKER, v); }
@@ -379,8 +380,18 @@ class RexxActivation : public ActivationBase
        settings.packageSettings.traceSettings.resetDebug();
        settings.setDebugBypass(true);
    }
-   inline bool              isNovalueErrorEnabled() { return settings.packageSettings.isNovalueErrorEnabled(); }
-   inline void              disableNovalueError() { return settings.packageSettings.disableNovalueError(); }
+   inline bool              isErrorSyntaxEnabled() { return settings.packageSettings.isErrorSyntaxEnabled(); }
+   inline void              disableErrorSyntax() { return settings.packageSettings.disableErrorSyntax(); }
+   inline bool              isFailureSyntaxEnabled() { return settings.packageSettings.isFailureSyntaxEnabled(); }
+   inline void              disableFailureSyntax() { return settings.packageSettings.disableFailureSyntax(); }
+   inline bool              isLostdigitsSyntaxEnabled() { return settings.packageSettings.isLostdigitsSyntaxEnabled(); }
+   inline void              disableLostdigitsSyntax() { return settings.packageSettings.disableLostdigitsSyntax(); }
+   inline bool              isNostringSyntaxEnabled() { return settings.packageSettings.isNostringSyntaxEnabled(); }
+   inline void              disableNostringSyntax() { return settings.packageSettings.disableNostringSyntax(); }
+   inline bool              isNotreadySyntaxEnabled() { return settings.packageSettings.isNotreadySyntaxEnabled(); }
+   inline void              disableNotreadySyntax() { return settings.packageSettings.disableNotreadySyntax(); }
+   inline bool              isNovalueSyntaxEnabled() { return settings.packageSettings.isNovalueSyntaxEnabled(); }
+   inline void              disableNovalueSyntax() { return settings.packageSettings.disableNovalueSyntax(); }
 
 
    inline void              stopExecution(ExecutionState state)
@@ -564,6 +575,9 @@ class RexxActivation : public ActivationBase
    RexxString *pullInput();
    RexxString *lineIn();
    void queue(RexxString *, Activity::QueueOrder);
+   StringTable *getFileNames();
+   void removeFileName(RexxString *name);
+   bool notCaseSensitive() { return settings.caseInsensitive; }
 
    static const size_t yieldInstructions = 50;            // the number of instructions we'll execute before a yield check
 

@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -319,8 +319,10 @@ bool ActivityManager::dispatchNext()
         // we're going to remove this in either case, so pop it off now.
         waitingActivities.pop_front();
 
-        // if this has not been posted yet, post now and return
-        if (!activity->hasRunPermission())
+        // if this has not been posted yet, post now and return.
+        // there are some situations where a NULL ends up in the queue, so
+        // just ignore those and keep looking
+        if (activity != OREF_NULL && !activity->hasRunPermission())
         {
             activity->postDispatch();
             return true;

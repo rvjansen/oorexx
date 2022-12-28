@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -62,7 +62,7 @@
 # include <sys/filio.h>
 #endif
 
-#if defined __APPLE__
+#if defined (__APPLE__) || defined(OPSYS_NETBSD) || defined(OPSYS_FREEBSD) || defined(OPSYS_OPENBSD)
 # define lseek64 lseek
 # define open64 open
 // avoid warning: '(f)stat64' is deprecated: first deprecated in macOS 10.6
@@ -104,6 +104,7 @@ SysFile::SysFile()
     filePointer = 0;
     ungetchar = -1;
     writeBuffered = false;     // no pending write operations
+    fileSize = -1;             // no retrieved file size yet
 }
 
 /**
@@ -113,6 +114,9 @@ SysFile::SysFile()
  * @param name       Name of the stream.
  * @param openFlags  The open flags.  This are the same flags used on the open()
  *                   function.
+ * @param openMode   Open mode.  Same flag values as _sopen().
+ * @param shareMode  The sharing mode.
+ *                   (not used on Unix platforms.)
  *
  * @return true if the file was opened successfully, false otherwise.
  *
@@ -133,12 +137,23 @@ bool SysFile::open(const char *name, int openFlags, int openMode, int shareMode)
         return false;
     }
 
+    // make sure we're not attempting to open a directory
+    struct stat fileInfo;
+    if (fstat(fileHandle, &fileInfo) != 0 || S_ISDIR(fileInfo.st_mode))
+    {
+        ::close(fileHandle);     // remove our file handle
+        fileHandle = -1;
+        errInfo = ENOENT;        // mark this as if open had failed
+        return false;
+    }
+
     // mark that we opened this handle
     openedHandle = true;
 
     // save a copy of the name
     filename = strdup(name);
     ungetchar = -1;              // 0xFF indicates no char
+    fileSize = -1;               // make sure we don't have a file size from a previous open
 
     // is this append mode?
     if ((flags & RX_O_APPEND) != 0)
@@ -171,7 +186,6 @@ bool SysFile::open(const char *name, int openFlags, int openMode, int shareMode)
  * Open a stream using a provided handle value.
  *
  * @param handle     The source stream handle.
- * @param fdopenMode The fdopen() mode flags for the stream.
  *
  * @return true if the file opened ok, false otherwise.
  *
@@ -185,7 +199,7 @@ bool SysFile::open(int handle)
     // we didn't open this.
     openedHandle = false;
     fileHandle = handle;
-    ungetchar = -1;              // 0xFF indicates no char
+    ungetchar = -1;            // -1 indicates no char
     getStreamTypeInfo();
 
     // set the default buffer size (and allocate the buffer)
@@ -287,6 +301,7 @@ bool SysFile::close()
     {
         if (::close(fileHandle) == EOF)
         {
+            // we've got an error, but this needs to be cleared
             fileHandle = -1;
             errInfo = errno;
             return false;
@@ -312,7 +327,7 @@ bool SysFile::flush()
         if (writeBuffered && bufferPosition > 0)
         {
             // write this out...but if it fails, we need to bail
-            int written = ::write(fileHandle, buffer, (unsigned int)bufferPosition);
+            ssize_t written = writeData(buffer, bufferPosition);
             // did we have an error?
             if (written <= 0)
             {
@@ -378,7 +393,6 @@ bool SysFile::read(char *buf, size_t len, size_t &bytesRead)
             bufferPosition = 0;
             bufferedInput = 0;
         }
-
 
         while (len > 0)
         {
@@ -450,7 +464,45 @@ bool SysFile::read(char *buf, size_t len, size_t &bytesRead)
     return true;
 }
 
+/**
+ * Wrapper around ::write() to handle writes larger than
+ * approx. 2 GB.
+ *
+ * @param data   The data to write.
+ * @param length The data length.
+ *
+ * @return The number of bytes written, or -1 on error
+ */
+ssize_t SysFile::writeData(const char *data, size_t length)
+{
+    // anytime we write data to the stream, we invalidate our cached
+    // file size because it's likely no longer valid
+    fileSize = -1;
 
+    // ::write() on Linux can handle chunks of 0x7ffff000 bytes at most,
+    // for both 32-/64-bit systems.  This doesn't apply to e. g. Solaris,
+    // but we always write this in 0x7ffff000-byte blocks or less.
+    size_t blocksize = (size_t)0x7ffff000;
+
+    // for various reasons ::write() can successfully return with less
+    // bytes written than requested, so we always loop until all data
+    // has been written or ::write() fails.
+    size_t bytesWritten = 0;
+    while (length > 0)
+    {
+        size_t segmentSize = length > blocksize ? blocksize : length;
+        ssize_t justWritten = ::write(fileHandle, data, segmentSize);
+        // write error?  bail out
+        if (justWritten <= 0)
+        {
+            return -1;
+        }
+        length -= justWritten;
+        bytesWritten += justWritten;
+        data += justWritten;
+    }
+    return bytesWritten;
+}
 
 
 /**
@@ -470,6 +522,11 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
     {
         return true;
     }
+
+    // anytime we write data to the stream, we invalidate our cached
+    // file size because it's likely no longer valid
+    fileSize = -1;
+
     // are we buffering?
     if (buffered)
     {
@@ -493,7 +550,7 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
             // flush an existing data from the buffer
             flush();
             // write this out directly
-            int written = ::write(fileHandle, data, (unsigned int)len);
+            ssize_t written = writeData(data, len);
             // oh, oh...got a problem
             if (written <= 0)
             {
@@ -545,7 +602,7 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
                 }
             }
             // write the data
-            int written = ::write(fileHandle, data, (unsigned int)len);
+            ssize_t written = writeData(data, len);
             if (written <= 0)
             {
                 // return error status if there was a problem
@@ -558,7 +615,7 @@ bool SysFile::write(const char *data, size_t len, size_t &bytesWritten)
         else
         {
             // write the data
-            int written = ::write(fileHandle, data, (unsigned int)len);
+            ssize_t written = writeData(data, len);
             if (written <= 0)
             {
                 // return error status if there was a problem
@@ -580,6 +637,7 @@ bool SysFile::putChar(char ch)
 
 bool SysFile::ungetc(char ch)
 {
+    // make sure there's no sign extension
     ungetchar = ((int)ch) & 0xff;
     return true;
 }
@@ -593,7 +651,7 @@ bool SysFile::puts(const char *data, size_t &len)
  * Write a line to the stream, adding the platform specific
  * line terminator.
  *
- * @param mybuffer Start of the line to write.
+ * @param buffer Start of the line to write.
  * @param len    The length to write.
  * @param bytesWritten
  *               The actual number of bytes written, including the line
@@ -601,12 +659,12 @@ bool SysFile::puts(const char *data, size_t &len)
  *
  * @return A success/failure indicator.
  */
-bool SysFile::putLine(const char *mybuffer, size_t len, size_t &bytesWritten)
+bool SysFile::putLine(const char *buffer, size_t len, size_t &bytesWritten)
 {
     // this could be a null line...don't try to write zero bytes
     if (len > 0)
     {
-        if (!write(mybuffer, len, bytesWritten))
+        if (!write(buffer, len, bytesWritten))
         {
             return false;
         }
@@ -1011,28 +1069,35 @@ bool SysFile::getSize(int64_t &size)
     {
         // we might have pending output that might change the size
         flush();
-        // have a handle, use fstat() to get the info
-        struct stat64 fileInfo;
-        if (fstat64(fileHandle, &fileInfo) == 0)
+
+        // do we have a current file size? If not currently good, we need to
+        // get it again
+        if (fileSize == -1)
         {
-            // regular file?  return the defined size
-            if ((fileInfo.st_mode & S_IFREG) != 0)
+            // have a handle, use fstat() to get the info
+            struct stat64 fileInfo;
+            if (fstat64(fileHandle, &fileInfo) == 0)
             {
-                size = fileInfo.st_size;
+                // regular file?  return the defined size
+                if ((fileInfo.st_mode & S_IFREG) != 0)
+                {
+                    fileSize = fileInfo.st_size;
+                }
+                else
+                {
+                    fileSize = 0;
+                }
             }
-            else
-            {
-                size = 0;
-            }
-            return true;
         }
+        size = fileSize;      // use our cached value
+        return true;
     }
     return false;
 }
 
 /**
  * Retrieve the size of a file from the file name.  If the
- * name is a device, it zero is returned.
+ * name is not a regular file, zero is returned.
  *
  * @param size   The returned size value.
  *
@@ -1059,13 +1124,13 @@ bool SysFile::getSize(const char *name, int64_t &size)
 }
 
 /**
- * Retrieve the size of the stream.  If the stream is open,
- * it returns the stream size.  Zero is returned if this
+ * Retrieve the time stamp of the stream.  If the stream is open,
+ * it returns the stream time stamp.  The null string is returned if this
  * stream is not a regular file.
  *
- * @param size   The returned size value.
+ * @param time   The returned time stamp, e. g. Wed Jan 02 02:03:55 1980\n\0
  *
- * @return True if the size was retrievable, false otherwise.
+ * @return True if the time stamp was retrievable, false otherwise.
  */
 bool SysFile::getTimeStamp(const char *&time)
 {
@@ -1088,16 +1153,17 @@ bool SysFile::getTimeStamp(const char *&time)
 }
 
 /**
- * Retrieve the size of a file from the file name.  If the
- * name is a device, it zero is returned.
+ * Retrieve the time stamp of a file from the file name.  If the
+ * name is a device, the null string is returned.
  *
- * @param size   The returned size value.
+ * @param name   file path and name
+ * @param time   The returned time stamp, e. g. Wed Jan 02 02:03:55 1980\n\0
  *
- * @return True if the size was retrievable, false otherwise.
+ * @return True if the time stamp was retrievable, false otherwise.
  */
 bool SysFile::getTimeStamp(const char *name, const char *&time)
 {
-    time = "";         // default return value
+    time = "";     // default return value
     // the handle is not active, use the name
     struct stat64 fileInfo;
     if (stat64(name, &fileInfo) == 0)
@@ -1229,7 +1295,7 @@ bool SysFile::hasData()
     }
 
     // if there is buffered input, we can always return true
-    if (hasBufferedInput())
+    if (ungetchar != -1 || hasBufferedInput())
     {
         return true;
     }
@@ -1256,7 +1322,7 @@ bool SysFile::hasData()
 
     char c;
     int count = ::read(fileHandle, &c, (unsigned int)1);
-    if (count == 0)
+    if (count <= 0)
     {
         // remember that we've seen this
         fileeof = true;

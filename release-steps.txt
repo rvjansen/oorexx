@@ -1,0 +1,296 @@
+2022-12-15, Release Steps for ooRexx 5.0.0 as a role model
+
+- create a branch for 5.0.0 using current trunk (if no show stopper errors occur
+  running the ooRexx testsuite) for
+      "main/trunk" to "main/branches" and
+      "test/trunk" to "test/branches",
+      not yet for the docs (see below)
+
+  here the svn command for code and test (replace "userId" with yours)
+
+        svn copy --username=userId svn+ssh://orexx@svn.code.sf.net/p/oorexx/code-0/main/trunk svn+ssh://orexx@svn.code.sf.net/p/oorexx/code-0/main/branches/5.0.0  -m "Creating code branch 5.0.0 to prepare release."
+        svn copy --username=userId svn+ssh://orexx@svn.code.sf.net/p/oorexx/code-0/test/trunk svn+ssh://orexx@svn.code.sf.net/p/oorexx/code-0/test/branches/5.0.0 -m "Creating test branch 5.0.0 to prepare release."
+
+- update the ooRexx version related information in trunk to "5.1.0"
+
+  cf. <http://sourceforge.net/p/oorexx/code-0/12539> changes to:
+
+        main/trunk/CMakeLists.txt   -- update the release version information to the next release.
+           See https://sourceforge.net/p/oorexx/code-0/12539/#diff-1 for the types of changes required.
+        main/trunk/platform/windows/rexx32.exe.manifest
+        main/trunk/platform/windows/rexx64.exe.manifest
+
+  and cf. <http://sourceforge.net/p/oorexx/code-0/12540>
+
+        main/trunk/api/oorexxapi.h  -- Add a new version identifier define for the new release.
+           See https://sourceforge.net/p/oorexx/code-0/12540/ for an example
+
+- *before* creating the docs branches/5.0.0, the necessary steps:
+
+        - make sure all authors who have committed in the meantime are listed in their appropriate
+          ${book}/en-US/Author_Group.xml; to detect one can use tools/listAuthorsAsOfLate.rex
+
+        - make sure that ${book}/revision_info.txt has the latest revision information
+          of real updates to ${book}/en-US/*.xml files; one approach to update that file
+          is to first delete it, then run "updateEntityValues.rex -y 2022 -e "2022.12.25" -r 99999 .."
+          which will recreate ${book}/revision_info.txt
+
+        - make sure that all copyright texts are updated (you can use tools/updateCopyright.rex)
+
+- create the docs branch for 5.0.0 using current "docs/trunk" to "docs/branches/5.0.0"
+
+  here the svn command for code, documentation and test (replace "userId" with yours)
+
+        svn copy --username=userId svn+ssh://orexx@svn.code.sf.net/p/oorexx/code-0/docs/trunk svn+ssh://orexx@svn.code.sf.net/p/oorexx/code-0/docs/branches/5.0.0 -m "Creating docs branch 5.0.0 to prepare release."
+
+- update the ooRexx documentation in trunk to not show *CHG* and *NEW* for 50 anymore
+
+??   this may be as easy as changing the entity definitions
+??
+??       <!ENTITY added50 "*NEW* ">
+??       <!ENTITY changed50 "*CHG* ">
+??   to
+??       <!ENTITY added50 "">
+??       <!ENTITY changed50 "">
+??
+??   and to add for new additions and changes in the documentation
+??
+??       <!ENTITY added51 "*NEW* ">
+??       <!ENTITY changed51 "*CHG* ">
+??
+??   in the files: rexxapi/en-US/rexxapi.ent, rexxpg/en-US/rexxpg.ent, rexxref/en-US/rexxref.ent,
+??   winextensions/en-US/winextensions.ent
+
+- Suggestion for a time table:
+
+    t0: if the tests on Jenkins show no show-stopper errors from the latest trunk, then create the branch: ASAP
+    t1: apply the necessary changes in the branch (version information update, release information update):  < =(t0+7 days)
+    t2: create the installation packages from the branch and upload them to a staged directory "5.0.0": after a week (t1+1)
+    t3: communicate the availability: t2+1
+
+- create on Sourceforge:
+
+        oorexx/files/5.1.0beta        ... to receive the new builds from trunk
+        oorexx/oorexx-docs/5.1.0beta  ... to receive the new documentation from trunk
+
+        oorexx/files/5.0.0_Release_Candidate        ... to receive the tested builds from branches/5.0.0
+        oorexx/oorexx-docs/5.0.0_Release_Candidate  ... to receive the new documentation from trunk
+
+- adjust the build scripts on Jenkins and feed the 5.0.0_Release_Candidate and the 5.1.0beta folders
+  for code and documentation
+
+- release information:
+
+        update branches/5.0.0/NOTICES to reflect the current copyright year
+
+        update branches/5.0.0./CHANGES (a text file) to document all changes from the last release
+        for
+
+                - Bugs
+                - Feature-requests
+                - Documentation
+                - Patches
+
+        1) all items with the status "accepted" need to be checked to see whether they
+           have been worked on such that they can be changed to "pending". Accepted generally
+           means code changes have been made, so these should be included in the changes.
+           A decision needs to be made on whether the incomplete portions of the item (generally
+           doc or test work) need to be completed prior to the release.
+
+        2) all items with the status "pending" get included in CHANGES (the text file
+           located in trunk)
+
+??      3) all items with the status "pending" get changed to "closed"
+
+        4) a "Milestone 5.1.0" and "5.0.1" (for potential buf fix releases) needs to be
+           created, just did it, here the steps needed for "Bugs":
+
+                - pick "Administration"
+                - click on the lock icon in the upper hand corner
+                - click on the "Tickets" menu and then on the changed config "icon"
+                  left of the text "Bugs"
+                - choose "Field Management"
+                - add "5.1.0" to "Milestones" which represents ooRexx version numbers
+                  offered when new bugs get created
+
+??                ... this option page would allow to delete Milestones; which ones
+                      should we delete. RKM I would be in favor of deleting all of the 3.x.x labels,
+                      the list is getting a bit long. Also a few junk ones like vX.X.X.
+
+- release
+
+        - rename the folders from "5.0.0_Release_Candidate" to "5.0.0"
+
+        - announce the new release on the ooRexx related e-mail lists,
+          RexxLA e-mail list, BSF4ooRexx related e-mail lists
+
+          - ask the reader to forward the announcement to related e-mail lists
+            they participate (like the various IBM e-mail lists, other related
+            open-source e-mail lists and projects)
+
+        - use "svn move" to move main/branches/5.0.0 to main/releases/5.0.0, do the same
+          for the documentation (docs/branches/5.0.0 to docs/releases/5.0.0)
+
+
+- overall timetable estimate:
+
+        - t0: if the tests on Jenkins show no show-stopper errors from the latest
+              trunk, then create the branch
+
+        - t1: create the installation packages from the branch and upload them to a
+              staged directory "5.0.0"
+
+        - t2: apply the necessary changes in the branch (version information update,
+              release information update): within (t0+7) days the longest
+
+        - t3: communicate the availability: t2+1
+
+        - t4: once the release has been finalized, create a x.x.(n+1) branch from the release branche
+              to be used for potential bug fix releases. This includes updating the release number information
+              in the build.
+??            move the "main|docs|test"/branches/5.0.0 to "main|docs|test"/releases/5.0.0
+
+------------
+
+Changes to be made to Jenkins
+
+For all Build jobs (31 2022-12-16)
+
+Change Build Repository URL from trunk
+
+https://svn.code.sf.net/p/oorexx/code-0/main/trunk
+
+to Release Candidate
+
+https://svn.code.sf.net/p/oorexx/code-0/main/branches/5.0.0
+
+ ooRexx-CentOS9-build
+ ooRexx-Controller-Ubuntu20-build
+ ooRexx-Debian11-build
+ ooRexx-Fedora35-build
+ ooRexx-FreeBSD13-build
+ ooRexx-linux-aarch64-build
+ ooRexx-LinuxMint20-build
+ ooRexx-macOS10-build
+ ooRexx-macOS11-build
+ ooRexx-macOS12-build
+ ooRexx-macOS12-M1-build
+ ooRexx-NetBSD9-build
+ ooRexx-OpenBSD7_1-build
+ ooRexx-OpenIndiana-build
+ ooRexx-OpenSuse15-build
+ ooRexx-RaspberryPiOS32-build
+ ooRexx-RaspberryPiOS64-build
+ oorexx-ubuntu16-build
+ oorexx-ubuntu16debug-build
+ ooRexx-Ubuntu22-build
+ ooRexx-windows10_32-build
+ ooRexx-windows10_64-build
+ ooRexx-windows11_32-build
+ ooRexx-windows11_64-build
+ ooRexx-windows32-build 19
+ ooRexx-windows64-build 20
+ ooRexx-windows7_32-build
+ ooRexx-windows7_64-build
+ ooRexx-windows8_32-build
+ ooRexx-windows8_64-build
+ ooRexx-Z-build
+
+For all Test jobs (29 2022-12-16)
+
+Change Test Repository URL from trunk
+
+https://svn.code.sf.net/p/oorexx/code-0/test/trunk
+
+to Release Candidate
+
+https://svn.code.sf.net/p/oorexx/code-0/test/branches/5.0.0
+
+ ooRexx-CentOS9-test
+ ooRexx-Controller-Ubuntu20-test
+ ooRexx-Debian11-test
+ ooRexx-Fedora35-test
+ ooRexx-FreeBSD13-test
+ ooRexx-LinuxMint20-test
+ ooRexx-macOS10-test
+ ooRexx-macOS11-test
+ ooRexx-macOS12-M1-test
+ ooRexx-macOS12-test
+ ooRexx-NetBSD9-test
+ ooRexx-OpenBSD7_1-test
+ ooRexx-OpenIndiana-test
+ ooRexx-OpenSuse15-test
+ ooRexx-RaspberryPiOS32-test
+ ooRexx-RaspberryPiOS64-test
+ oorexx-ubuntu16-test
+ ooRexx-Ubuntu22-test
+ ooRexx-windows10_32-test
+ ooRexx-windows10_64-test
+ ooRexx-windows11_32-test
+ ooRexx-windows11_64-test
+ ooRexx-windows32-test
+ ooRexx-windows64-test
+ ooRexx-windows7_32-test
+ ooRexx-windows7_64-test
+ ooRexx-windows8_32-test
+ ooRexx-windows8_64-test
+ ooRexx-Z-test
+
+
+in ooRexx-docs-build
+
+change the Documentation Repository URL from trunk
+
+https://svn.code.sf.net/p/oorexx/code-0/docs/trunk
+
+to the release candidate
+
+https://svn.code.sf.net/p/oorexx/code-0/docs/branches/5.0.0
+
+Currently the upload of docs go to (two folders, PDF and html)
+
+/oorexx-docs/5.0.0beta'
+/oorexx-docs/5.0.0html'
+
+Changed to  (PDF currently
+
+ oorexx-docs/5.0.0_Release_Candidate (staged)
+
+ooRexx-{sourceforge-upload}
+
+Currently the upload of  artifacts go to
+
+sourceforgeFiles = "/home/frs/project/oorexx/oorexx/5.0.0beta"
+
+CHANGED TO oorexx/5.0.0_Release_Candidate (staged) in the upload script but this is not sufficient -> There was a delay problem, is working as intended after some time
+
+in jenkinsArtifactUpload.rex in /var/lib/jenkins/workspace/ooRexx-{sourceforge-upload}
+
+The following artifacts are selected for upload (we might remove some of these):
+ooRexx-CentOS9-build
+ooRexx-Debian11-build
+ooRexx-Fedora35-build
+ooRexx-FreeBSD13-build
+ooRexx-linux-aarch64-build
+ooRexx-LinuxMint20-build
+ooRexx-macOS11-build
+ooRexx-macOS12-build
+ooRexx-NetBSD9-build
+ooRexx-OpenBSD7_1-build
+ooRexx-OpenIndiana-build
+ooRexx-OpenSuse15-build
+ooRexx-RaspberryPiOS32-build
+ooRexx-RaspberryPiOS64-build
+oorexx-ubuntu16-build
+oorexx-ubuntu16debug-build
+ooRexx-Controller-Ubuntu20-build
+ooRexx-Ubuntu22-build
+ooRexx-windows32-build
+ooRexx-windows64-build
+ooRexx-Z-build
+
+------------
+
+Before any new release go through the tools used for documentation build to make sure they are still up to date; make any changes BEFORE a specific version is frozen to avoid double copying to release and trunk
+
+Same for all platforms that we are currently building, work through all build and test "Projects" on Jenkins and note any build that fail (and the reason therefor) and any tests that are excluded (with a hint to a bug report if available)

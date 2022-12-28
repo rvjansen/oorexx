@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -50,6 +50,53 @@
 #include "LanguageParser.hpp"
 #include "RexxActivation.hpp"
 
+
+
+/**
+ * Perform garbage collection on a live object.
+ *
+ * @param liveMark The current live mark.
+ */
+void RexxBlockInstruction::live(size_t liveMark)
+{
+    // must be first object marked
+    memory_mark(nextInstruction);
+    memory_mark(end);
+    memory_mark(label);
+}
+
+
+/**
+ * Perform generalized live marking on an object.  This is
+ * used when mark-and-sweep processing is needed for purposes
+ * other than garbage collection.
+ *
+ * @param reason The reason for the marking call.
+ */
+void RexxBlockInstruction::liveGeneral(MarkReason reason)
+{
+    // must be first object marked
+    memory_mark_general(nextInstruction);
+    memory_mark_general(end);
+    memory_mark_general(label);
+}
+
+
+/**
+ * Flatten a source object.
+ *
+ * @param envelope The envelope that will hold the flattened object.
+ */
+void RexxBlockInstruction::flatten(Envelope *envelope)
+{
+    setUpFlatten(RexxBlockInstruction)
+
+    flattenRef(nextInstruction);
+    flattenRef(end);
+    flattenRef(label);
+
+    cleanUpFlatten
+}
 
 
 /**

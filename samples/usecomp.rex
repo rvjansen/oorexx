@@ -1,13 +1,13 @@
-#!/usr/bin/env rexx
+#!@OOREXX_SHEBANG_PROGRAM@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                          */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -50,15 +50,22 @@
 /******************************************************************************/
 
 Say 'A simple example of complex number arithmetic:'
-comp1 = .complex[8,4]                       /* create two complex numbers     */
-comp2 = .complex[4,1]
+comp1 = .complex~new(-6,4)                  /* create two complex numbers     */
+comp2 = .complex[4,1]                       /* alternate syntax               */
+comp3 = .complex[-8]                        /* imaginary part omitted         */
+comp4 = .complex[, -1]                      /* real part omitted              */
 
 /* Note that SAY uses the STRING method of the COMPLEX class for display      */
+say '-('comp1') is' (-comp1)
+say '('comp2')~abs is' comp2~abs
 say '('comp1') + ('comp2') is' comp1+comp2
 say '('comp1') - ('comp2') is' comp1-comp2
 say '('comp1') * ('comp2') is' comp1*comp2
 say '('comp1') / ('comp2') is' comp1/comp2
-say '('comp1') % ('comp2') is' comp1%comp2
-say '('comp1') // ('comp2') is' comp1//comp2
+
+/* Note that comparisons and SORT use the COMPARETO method for ordering       */
+say '('comp1') > ('comp2') is' (comp1>comp2)
+say '.Array~of(('comp1'), ('comp2'), ('comp3'), ('comp4'))~sort[1] is' -
+    .Array~of(comp1, comp2, comp3, comp4)~sort[1]
 
 ::REQUIRES 'complex.cls'

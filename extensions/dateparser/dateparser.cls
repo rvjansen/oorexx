@@ -1,11 +1,11 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -109,7 +109,7 @@
   return context~parse
 
 
--- a class for formatting ing dates and times using a template
+-- a class for formatting dates and times using a template
 ::CLASS 'DateFormatter' PUBLIC
 -- formate a date using the template
 ::METHOD format CLASS
@@ -372,7 +372,7 @@
   hours = new
 
   -- we've set this, now there's some additional validation that can
-  -- be performed if the civid designation have been set
+  -- be performed if the civil designation have been set
 
   if civil \= .nil then do
     self~adjustCivilTime
@@ -492,7 +492,7 @@
   end
 
 
--- parse of an optional sign, returning it as either a positive or negative number
+-- parse off an optional sign, returning it as either a positive or negative number
 ::METHOD getSign
   if self~checkChar('+') then do
     return 1
@@ -676,7 +676,7 @@
     when "f" then do
       self~fraction = self~getFixedNumber(1, 0, 9) * 100000
     end
-    -- a time fraction in hundreths of a second
+    -- a time fraction in hundredths of a second
     when "ff" then do
       self~fraction = self~getFixedNumber(2, 0, 99) * 10000
     end
@@ -871,7 +871,7 @@
       end
   end
   else do
-      -- if we ended up too far in the future, step back a centry
+      -- if we ended up too far in the future, step back a century
       if (year - currentYear) > 49 then do
           year -= 100;
       end
@@ -896,7 +896,7 @@
     when "yy" then do
       self~year = self~resolveCentury(self~getFixedNumber(2, 0, 99))
     end
-    -- The year from1 to 9999, no leading zeros
+    -- The year from 1 to 9999, no leading zeros
     when "yyy" then do
       self~year = self~getVariableNumber(4, 0001, 9999)
     end
@@ -1141,22 +1141,17 @@
   -- get this as a basedate value using the local time then create the date object using the offset
   resultDate = .DateTime~new(date('F', date, 'S') + time("F", time, "L"), offset % 60000000)
 
-  -- now that we have this, see if there are and dangling elements to process
+  -- now that we have this, see if there are any dangling elements to process
   if weekDay \= .nil, weekDay \= resultDate~weekDay then do
     self~parsingError
   end
 
-  -- now that we have this, see if there are and dangling elements to process
+  -- now that we have this, see if there are any dangling elements to process
   if weekNumber \= .nil, weekNumber \= resultDate~weekNumber then do
     self~parsingError
   end
 
-  -- now that we have this, see if there are and dangling elements to process
-  if weekDay \= .nil, weekDay \= resultDate~weekNumberDay then do
-    self~parsingError
-  end
-
-  -- now that we have this, see if there are and dangling elements to process
+  -- now that we have this, see if there are any dangling elements to process
   if ordinal \= .nil, ordinal \= resultDate~yearDay then do
     self~parsingError
   end
@@ -1253,7 +1248,7 @@
     when "f" then do
       self~append(base~left(1))
     end
-    -- a time fraction in hundreths of a second
+    -- a time fraction in hundredths of a second
     when "ff" then do
       self~append(base~left(2))
     end
@@ -1506,6 +1501,9 @@
 
   -- zero offset is always marked as Zulu time
   if offset == 0 then do
+    -- type must be valid: "z", "zz", "zzz", or "zzzz"
+    if type~length > 4 then
+      self~templateError(type)
     self~append('Z')
   end
   else do
@@ -1527,18 +1525,18 @@
       when "z" then do
         self~append(hours)
       end
-      -- The the offset as a signed two digit number
+      -- The offset as a signed two digit number
       when "zz" then do
         self~append(hours~right(2, '0'))
       end
       -- The offset as "hhmm"
       when "zzz" then do
-        --this returns the padded value
+        -- this returns the padded value
         self~append(right(hours, 2, '0')||right(minutes, 2, '0'))
       end
       -- The offset as "hh:mm", where ":" is the defined time separator
       when "zzzz" then do
-        --this returns the padded value
+        -- this returns the padded value
         self~append(right(hours, 2, '0')||self~formats~timeSeparator||right(minutes, 2, '0'))
       end
       otherwise do

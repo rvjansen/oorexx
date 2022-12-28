@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -49,7 +49,7 @@
 #include <ctype.h>
 
 /**
- * Take in an agument passed to a method, convert it to a length
+ * Take in an argument passed to a method, convert it to a length
  * object, verifying that the number is a non-negative value.
  * If the argument is omitted, an error is raised.
  *
@@ -75,7 +75,7 @@ size_t lengthArgument(RexxObject *argument, size_t position)
 
 
 /**
- * Take in an agument passed to a method, convert it to a length
+ * Take in an argument passed to a method, convert it to a length
  * object, verifying that the number is a non-negative value.
  * If the argument is omitted, an error is raised.
  *
@@ -101,7 +101,7 @@ size_t lengthArgument(RexxObject *argument, const char *position)
 
 
 /**
- * Take in an agument passed to a method, convert it to a
+ * Take in an argument passed to a method, convert it to a
  * numeric object. If the argument is omitted, an error is
  * raised.
  *
@@ -128,7 +128,7 @@ wholenumber_t numberArgument(RexxObject *argument, size_t position)
 
 
 /**
- * Take in an agument passed to a method, convert it to a
+ * Take in an argument passed to a method, convert it to a
  * numeric object. If the argument is omitted, an error is
  * raised.
  *
@@ -155,7 +155,7 @@ wholenumber_t numberArgument(RexxObject *argument, const char *position)
 
 
 /**
- * Take in an agument passed to a method, convert it to a length
+ * Take in an argument passed to a method, convert it to a length
  * object, verifying that the number is a non-negative value.
  * If the argument is omitted, an error is raised.
  *
@@ -176,7 +176,7 @@ size_t nonNegativeArgument(RexxObject *argument, size_t position )
 
 
 /**
- * Take in an agument passed to a method, convert it to a length
+ * Take in an argument passed to a method, convert it to a length
  * object, verifying that the number is a non-negative value.
  * If the argument is omitted, an error is raised.
  *
@@ -197,7 +197,7 @@ size_t nonNegativeArgument(RexxObject *argument, const char *position )
 
 
 /**
- * Take in an agument passed to a method, convert it to a position
+ * Take in an argument passed to a method, convert it to a position
  * value, verifying that the number is a positive value.
  * If the argument is omitted, an error is raised.
  *
@@ -223,7 +223,7 @@ size_t positionArgument(RexxObject *argument, size_t position )
 
 
 /**
- * Take in an agument passed to a method, convert it to a position
+ * Take in an argument passed to a method, convert it to a position
  * value, verifying that the number is a positive value.
  * If the argument is omitted, an error is raised.
  *
@@ -306,7 +306,7 @@ char optionArgument(RexxObject *argument, size_t position)
 {
     // must be a string value
     RexxString *parameter = stringArgument(argument, position);
-    return toupper(parameter->getChar(0));
+    return Utilities::toUpper(parameter->getChar(0));
 }
 
 
@@ -324,7 +324,7 @@ char optionArgument(RexxObject *argument, const char *position)
 {
     // must be a string value
     RexxString *parameter = stringArgument(argument, position);
-    return toupper(parameter->getChar(0));
+    return Utilities::toUpper(parameter->getChar(0));
 }
 
 
@@ -345,7 +345,7 @@ char optionArgument(RexxObject *argument, const char *validOptions, size_t posit
     RexxString *parameter = stringArgument(argument, position);
 
     // get the first character of the string
-    char option = toupper(parameter->getChar(0));
+    char option = Utilities::toUpper(parameter->getChar(0));
     // if not one of the valid options (null string is not valid), raise the error
     if (parameter->isNullString() || strchr(validOptions, option) == NULL)
     {
@@ -372,13 +372,38 @@ char optionArgument(RexxObject *argument, const char *validOptions, const char *
     RexxString *parameter = stringArgument(argument, position);
 
     // get the first character of the string
-    char option = toupper(parameter->getChar(0));
+    char option = Utilities::toUpper(parameter->getChar(0));
     // if not one of the valid options (null string is not valid), raise the error
     if (parameter->isNullString() || strchr(validOptions, option) == NULL)
     {
         reportException(Error_Incorrect_method_option, validOptions, parameter);
     }
     return option;
+}
+
+
+/**
+ * Take in an argument passed to a method, convert it to a
+ * floating point number. If the argument is omitted, an error is
+ * raised.
+ *
+ * @param argument The argument reference to test.
+ * @param position The name of the argument (used for error reporting.)
+ *
+ * @return The argument converted to a double floating point value.
+ */
+double floatingPointArgument(RexxObject *argument, const char *name)
+{
+    if (argument == OREF_NULL)
+    {
+        missingArgument(name);
+    }
+    double value;
+    if (!argument->doubleValue(value))
+    {
+        reportException(Error_Invalid_argument_number, name, argument);
+    }
+    return value;
 }
 
 

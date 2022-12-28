@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -947,7 +947,7 @@ void LanguageParser::methodDirective()
  */
 void LanguageParser::optionsDirective()
 {
-    // all options are of a keyword/value pattern
+    // except for (NO)PROLOG all options are of a keyword/value pattern
     for (;;)
     {
 
@@ -1078,25 +1078,215 @@ void LanguageParser::optionsDirective()
                     token = nextReal();
                     if (!token->isSymbol())
                     {
-                        syntaxError(Error_Symbol_or_string_keyword, new_string("NOVALUE"));
+                        syntaxError(Error_Symbol_or_string_keyword, GlobalNames::NOVALUE);
                     }
 
                     switch (token->subDirective())
                     {
-                        case SUBDIRECTIVE_ERROR:
+                        case SUBDIRECTIVE_ERROR: // backwards compatibility for NOVALUE
+                        case SUBDIRECTIVE_SYNTAX:
                         {
-                            package->enableNovalueError();
+                            package->enableNovalueSyntax();
                             break;
                         }
 
                         case SUBDIRECTIVE_CONDITION:
                         {
-                            package->disableNovalueError();
+                            package->disableNovalueSyntax();
                             break;
                         }
 
                         default:
-                            syntaxError(Error_Invalid_subkeyword_following, new_string("NOVALUE"), token->value());
+                            syntaxError(Error_Invalid_subkeyword_following, GlobalNames::NOVALUE, token->value());
+                    }
+                    break;
+                }
+
+                // ::OPTIONS ERROR
+                case SUBDIRECTIVE_ERROR:
+                {
+                    token = nextReal();
+                    if (!token->isSymbol())
+                    {
+                        syntaxError(Error_Symbol_or_string_keyword, GlobalNames::ERRORNAME);
+                    }
+
+                    switch (token->subDirective())
+                    {
+                        case SUBDIRECTIVE_SYNTAX:
+                        {
+                            package->enableErrorSyntax();
+                            break;
+                        }
+
+                        case SUBDIRECTIVE_CONDITION:
+                        {
+                            package->disableErrorSyntax();
+                            break;
+                        }
+
+                        default:
+                            syntaxError(Error_Invalid_subkeyword_following, GlobalNames::ERRORNAME, token->value());
+                    }
+                    break;
+                }
+
+                // ::OPTIONS FAILURE
+                case SUBDIRECTIVE_FAILURE:
+                {
+                    token = nextReal();
+                    if (!token->isSymbol())
+                    {
+                        syntaxError(Error_Symbol_or_string_keyword, GlobalNames::FAILURE);
+                    }
+
+                    switch (token->subDirective())
+                    {
+                        case SUBDIRECTIVE_SYNTAX:
+                        {
+
+                            package->enableFailureSyntax();
+                            break;
+                        }
+
+                        case SUBDIRECTIVE_CONDITION:
+                        {
+                            package->disableFailureSyntax();
+                            break;
+                        }
+
+                        default:
+                            syntaxError(Error_Invalid_subkeyword_following, GlobalNames::FAILURE, token->value());
+                    }
+                    break;
+                }
+
+                // ::OPTIONS LOSTDIGITS
+                case SUBDIRECTIVE_LOSTDIGITS:
+                {
+                    token = nextReal();
+                    if (!token->isSymbol())
+                    {
+                        syntaxError(Error_Symbol_or_string_keyword, GlobalNames::LOSTDIGITS);
+                    }
+
+                    switch (token->subDirective())
+                    {
+                        case SUBDIRECTIVE_SYNTAX:
+                        {
+
+                            package->enableLostdigitsSyntax();
+                            break;
+                        }
+
+                        case SUBDIRECTIVE_CONDITION:
+                        {
+                            package->disableLostdigitsSyntax();
+                            break;
+                        }
+
+                        default:
+                            syntaxError(Error_Invalid_subkeyword_following, GlobalNames::LOSTDIGITS, token->value());
+                    }
+                    break;
+                }
+
+                // ::OPTIONS NOSTRING
+                case SUBDIRECTIVE_NOSTRING:
+                {
+                    token = nextReal();
+                    if (!token->isSymbol())
+                    {
+                        syntaxError(Error_Symbol_or_string_keyword, GlobalNames::NOSTRING);
+                    }
+
+                    switch (token->subDirective())
+                    {
+                        case SUBDIRECTIVE_SYNTAX:
+                        {
+
+                            package->enableNostringSyntax();
+                            break;
+                        }
+
+                        case SUBDIRECTIVE_CONDITION:
+                        {
+                            package->disableNostringSyntax();
+                            break;
+                        }
+
+                        default:
+                            syntaxError(Error_Invalid_subkeyword_following, GlobalNames::NOSTRING, token->value());
+                    }
+                    break;
+                }
+
+                // ::OPTIONS NOTREADY
+                case SUBDIRECTIVE_NOTREADY:
+                {
+                    token = nextReal();
+                    if (!token->isSymbol())
+                    {
+                        syntaxError(Error_Symbol_or_string_keyword, GlobalNames::NOTREADY);
+                    }
+
+                    switch (token->subDirective())
+                    {
+                        case SUBDIRECTIVE_SYNTAX:
+                        {
+
+                            package->enableNotreadySyntax();
+                            break;
+                        }
+
+                        case SUBDIRECTIVE_CONDITION:
+                        {
+                            package->disableNotreadySyntax();
+                            break;
+                        }
+
+                        default:
+                            syntaxError(Error_Invalid_subkeyword_following, GlobalNames::NOTREADY, token->value());
+                    }
+                    break;
+                }
+
+                // ::OPTIONS ALL
+                case SUBDIRECTIVE_ALL:
+                {
+                    token = nextReal();
+                    if (!token->isSymbol())
+                    {
+                        syntaxError(Error_Symbol_or_string_keyword, GlobalNames::ALL);
+                    }
+
+                    switch (token->subDirective())
+                    {
+                        case SUBDIRECTIVE_SYNTAX:
+                        {
+
+                            package->enableErrorSyntax();
+                            package->enableFailureSyntax();
+                            package->enableLostdigitsSyntax();
+                            package->enableNostringSyntax();
+                            package->enableNotreadySyntax();
+                            package->enableNovalueSyntax();
+                            break;
+                        }
+
+                        case SUBDIRECTIVE_CONDITION:
+                        {
+                            package->disableErrorSyntax();
+                            package->disableFailureSyntax();
+                            package->disableLostdigitsSyntax();
+                            package->disableNostringSyntax();
+                            package->disableNotreadySyntax();
+                            package->disableNovalueSyntax();
+                            break;
+                        }
+
+                        default:
+                            syntaxError(Error_Invalid_subkeyword_following, GlobalNames::ALL, token->value());
                     }
                     break;
                 }
@@ -1166,9 +1356,8 @@ void LanguageParser::decodeExternalMethod(RexxString *methodName, RexxString *ex
     procedure = methodName;
     library = OREF_NULL;
 
-    // convert into an array of words
-    // NOTE:  This method makes all of the words part of the
-    // common string pool
+    // convert external into array of words (this also adds all words
+    // to the common string pool and uppercases the first word)
     Protected<ArrayClass> _words = words(externalSpec);
     // not 'LIBRARY library [entry]' form?
     if (((RexxString *)(_words->get(1)))->strCompare("LIBRARY"))
@@ -1725,7 +1914,7 @@ void LanguageParser::annotateDirective()
             // this must be a literal string
             if (!token->isSymbolOrLiteral())
             {
-                syntaxError(Error_Symbol_or_string_directive_option, new_string("::ANNOTATE"), new_string("CLASS"));
+                syntaxError(Error_Symbol_or_string_directive_option, GlobalNames::ANNOTATE_DIRECTIVE, GlobalNames::CLASS);
             }
 
             // get the target class name
@@ -1736,7 +1925,7 @@ void LanguageParser::annotateDirective()
             // raise the error now.
             if (directive == OREF_NULL)
             {
-                syntaxError(Error_Translation_missing_annotation_target, new_string("class"), name);
+                syntaxError(Error_Translation_missing_annotation_target, "class", name);
             }
 
             // get this directly from the directive.  Note, annotations are accumulative.
@@ -1752,7 +1941,7 @@ void LanguageParser::annotateDirective()
             // this must be a literal string
             if (!token->isSymbolOrLiteral())
             {
-                syntaxError(Error_Symbol_or_string_directive_option, new_string("::ANNOTATE"), new_string("ROUTINE"));
+                syntaxError(Error_Symbol_or_string_directive_option, GlobalNames::ANNOTATE_DIRECTIVE, GlobalNames::ROUTINE);
             }
 
             // get the target name
@@ -1763,7 +1952,7 @@ void LanguageParser::annotateDirective()
             // raise the error now.
             if (routine == OREF_NULL)
             {
-                syntaxError(Error_Translation_missing_annotation_target, new_string("routine"), name);
+                syntaxError(Error_Translation_missing_annotation_target, "routine", name);
             }
 
             // get this directly from the directive.  Note, annotations are accumulative.
@@ -1779,7 +1968,7 @@ void LanguageParser::annotateDirective()
             // this must be a literal string
             if (!token->isSymbolOrLiteral())
             {
-                syntaxError(Error_Symbol_or_string_directive_option, new_string("::ANNOTATE"), new_string("METHOD"));
+                syntaxError(Error_Symbol_or_string_directive_option, GlobalNames::ANNOTATE_DIRECTIVE, GlobalNames::METHOD);
             }
 
             // get the target method
@@ -1790,7 +1979,7 @@ void LanguageParser::annotateDirective()
             // raise the error now.
             if (method == OREF_NULL)
             {
-                syntaxError(Error_Translation_missing_annotation_target, new_string("method"), name);
+                syntaxError(Error_Translation_missing_annotation_target, "method", name);
             }
 
             // get this directly from the directive.  Note, annotations are accumulative.
@@ -1806,7 +1995,7 @@ void LanguageParser::annotateDirective()
             // this must be a literal string
             if (!token->isSymbolOrLiteral())
             {
-                syntaxError(Error_Symbol_or_string_directive_option, new_string("::ANNOTATE"), new_string("ATTRIBUTE"));
+                syntaxError(Error_Symbol_or_string_directive_option, GlobalNames::ANNOTATE_DIRECTIVE, GlobalNames::ATTRIBUTE);
             }
 
             // get the target attribute name
@@ -1826,7 +2015,7 @@ void LanguageParser::annotateDirective()
             // this must be a literal string
             if (!token->isSymbolOrLiteral())
             {
-                syntaxError(Error_Symbol_or_string_directive_option, new_string("::ANNOTATE"), new_string("CONSTANT"));
+                syntaxError(Error_Symbol_or_string_directive_option, GlobalNames::ANNOTATE_DIRECTIVE, GlobalNames::CONSTANT);
             }
 
             // get the target class name
@@ -1843,7 +2032,7 @@ void LanguageParser::annotateDirective()
             // raise the error now.
             if (method == OREF_NULL)
             {
-                syntaxError(Error_Translation_missing_annotation_target, new_string("constant"), name);
+                syntaxError(Error_Translation_missing_annotation_target, "constant", name);
             }
 
             // get this directly from the directive.  Note, annotations are accumulative.
@@ -1925,7 +2114,7 @@ void LanguageParser::processAttributeAnnotations(RexxString *getterName)
     // annotations to process.
     if (getterMethod == OREF_NULL && setterMethod == OREF_NULL)
     {
-        syntaxError(Error_Translation_missing_annotation_target, new_string("attribute"), getterName);
+        syntaxError(Error_Translation_missing_annotation_target, "attribute", getterName);
     }
 
     // parse this one, then merge into each of the methods
@@ -2365,7 +2554,7 @@ void LanguageParser::routineDirective()
                 // this is a compound string descriptor, so it must be a literal
                 if (!token->isLiteral())
                 {
-                    syntaxError(Error_Symbol_or_string_directive_option, new_string("::ROUTINE"), new_string("EXTERNAL"));
+                    syntaxError(Error_Symbol_or_string_directive_option, GlobalNames::ROUTINE_DIRECTIVE, GlobalNames::EXTERNAL);
                 }
 
                 externalname = token->value();
@@ -2400,8 +2589,8 @@ void LanguageParser::routineDirective()
         // is this mapped to an external library?
         if (externalname != OREF_NULL)
         {
-            // convert external into words (this also adds the strings
-            // to the common string pool)
+            // convert external into array of words (this also adds all words
+            // to the common string pool and uppercases the first word)
             Protected<ArrayClass> _words = words(externalname);
             // ::ROUTINE foo EXTERNAL "LIBRARY libbar [foo]"
             // NOTE:  decodeMethodLibrary doesn't really work for routines

@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -44,6 +44,7 @@
 #include "RexxCore.h"
 #include "CompoundTableElement.hpp"
 #include "Activity.hpp"
+#include "RexxActivation.hpp"
 
 
 /**
@@ -68,6 +69,7 @@ void CompoundTableElement::live(size_t liveMark)
 {
     memory_mark(variableValue);
     memory_mark(variableName);
+    memory_mark(creator);
     memory_mark(dependents);
     memory_mark(parent);
     memory_mark(left);
@@ -85,6 +87,7 @@ void CompoundTableElement::liveGeneral(MarkReason reason)
 {
     memory_mark_general(variableValue);
     memory_mark_general(variableName);
+    memory_mark_general(creator);
     memory_mark_general(dependents);
     memory_mark_general(parent);
     memory_mark_general(left);
@@ -106,6 +109,8 @@ void CompoundTableElement::flatten(Envelope *envelope)
 
     flattenRef(variableValue);
     flattenRef(variableName);
+    // we cannot flatten an activation, so this is nulled out also
+    creator = OREF_NULL;
     // We do not want to flatten a table of activities, so
     // null that out.
     dependents = OREF_NULL;

@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -359,6 +359,7 @@ KeywordEntry RexxToken::parseOptions[] =
 KeywordEntry RexxToken::subDirectives[] =
 {
     KeywordEntry("ABSTRACT",    SUBDIRECTIVE_ABSTRACT),
+    KeywordEntry("ALL",         SUBDIRECTIVE_ALL),
     KeywordEntry("ATTRIBUTE",   SUBDIRECTIVE_ATTRIBUTE),
     KeywordEntry("CLASS",       SUBDIRECTIVE_CLASS),
     KeywordEntry("CONDITION",   SUBDIRECTIVE_CONDITION),
@@ -368,17 +369,21 @@ KeywordEntry RexxToken::subDirectives[] =
     KeywordEntry("END",         SUBDIRECTIVE_END),
     KeywordEntry("ERROR",       SUBDIRECTIVE_ERROR),
     KeywordEntry("EXTERNAL",    SUBDIRECTIVE_EXTERNAL),
+    KeywordEntry("FAILURE",     SUBDIRECTIVE_FAILURE),
     KeywordEntry("FORM",        SUBDIRECTIVE_FORM),
     KeywordEntry("FUZZ",        SUBDIRECTIVE_FUZZ),
     KeywordEntry("GET",         SUBDIRECTIVE_GET),
     KeywordEntry("GUARDED",     SUBDIRECTIVE_GUARDED),
     KeywordEntry("INHERIT",     SUBDIRECTIVE_INHERIT),
     KeywordEntry("LIBRARY",     SUBDIRECTIVE_LIBRARY),
+    KeywordEntry("LOSTDIGITS",  SUBDIRECTIVE_LOSTDIGITS),
     KeywordEntry("METACLASS",   SUBDIRECTIVE_METACLASS),
     KeywordEntry("METHOD",      SUBDIRECTIVE_METHOD),
     KeywordEntry("MIXINCLASS",  SUBDIRECTIVE_MIXINCLASS),
     KeywordEntry("NAMESPACE",   SUBDIRECTIVE_NAMESPACE),
     KeywordEntry("NOPROLOG",    SUBDIRECTIVE_NOPROLOG),
+    KeywordEntry("NOSTRING",    SUBDIRECTIVE_NOSTRING),
+    KeywordEntry("NOTREADY",    SUBDIRECTIVE_NOTREADY),
     KeywordEntry("NOVALUE",     SUBDIRECTIVE_NOVALUE),
     KeywordEntry("PACKAGE",     SUBDIRECTIVE_PACKAGE),
     KeywordEntry("PRIVATE",     SUBDIRECTIVE_PRIVATE),
@@ -388,6 +393,7 @@ KeywordEntry RexxToken::subDirectives[] =
     KeywordEntry("ROUTINE",     SUBDIRECTIVE_ROUTINE),
     KeywordEntry("SET",         SUBDIRECTIVE_SET),
     KeywordEntry("SUBCLASS",    SUBDIRECTIVE_SUBCLASS),
+    KeywordEntry("SYNTAX",      SUBDIRECTIVE_SYNTAX),
     KeywordEntry("TRACE",       SUBDIRECTIVE_TRACE),
     KeywordEntry("UNGUARDED",   SUBDIRECTIVE_UNGUARDED),
     KeywordEntry("UNPROTECTED", SUBDIRECTIVE_UNPROTECTED),

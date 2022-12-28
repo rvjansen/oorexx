@@ -1,13 +1,11 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Description: Class to encode and decode ooRexx objects in JSON.            */
-/*                                                                            */
-/* Copyright (c) 2010-2016 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2010-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.ibm.com/developerworks/oss/CPLv1.0.htm                          */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -35,18 +33,16 @@
 /* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS         */
 /* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.               */
 /*                                                                            */
-/* Author: Brandon W. Cherry                                                  */
-/*                                                                            */
 /*----------------------------------------------------------------------------*/
 
-/* RFC 4627 */
+-- A class to encode and decode ooRexx objects in JSON (RFC 4627)
 ::class json public
 
 /**
  * Initilizes the class
  */
 ::method init
-    expose eJS uJS whitespace ctrl
+    expose eJS uJS ctrl
 
     eJS = .directory~new() -- escape Javascript
     eJS['08'x] = '\b'
@@ -63,27 +59,20 @@
         uJS[eJS[index]] = index
     end
 
-    whitespace = .set~new() -- allowed whitespace chars
-    whitespace[] = '09'x
-    whitespace[] = '0A'x
-    whitespace[] = '0D'x
-    whitespace[] = ' '
-
-    ctrl = whitespace~copy() -- chars that end a value
-    ctrl[] = '}'
-    ctrl[] = ']'
-    ctrl[] = ','
+    -- chars that end a value
+    ctrl = .Set~of(' ', '}', ']', ',', '09'x, '0a'x, '0d'x)
 
 /**
- * Converts a rexx object to JSON formatting to pass to eval()
+ * Converts a Rexx object to JSON formatting
  *
- * @param  rexxObject   The object to converts directory, array,
- *                      or string objects. Otherwise, it calls
- *                      the makearray method for the object.
+ * @param  rexxObject   The object to convert.  Accepts directory, array,
+ *                      or string objects, or nil.  Otherwise, it calls
+ *                      the makeArray method for the object, returning
+ *                      "null" if no makeArray method is available.
  */
 ::method toJSON
     expose buffer
-    use arg rexxObject
+    use strict arg rexxObject
 
     buffer = .mutablebuffer~new()
     self~parseRexxObject(rexxObject)
@@ -91,7 +80,7 @@ return buffer~string
 
 ::method parseRexxObject private
     expose buffer
-    use arg rexxObject
+    use strict arg rexxObject
 
     select
         when .array~id == rexxObject~class~id then do
@@ -115,7 +104,7 @@ return buffer~string
 
 ::method parseRexxArray private
     expose buffer
-    use arg rexxObject
+    use strict arg rexxObject
 
     buffer~append('[')
     if rexxObject~items() == 0 then buffer~append(']')
@@ -129,7 +118,7 @@ return buffer~string
 
 ::method parseRexxDirectory private
     expose buffer
-    use arg rexxObject
+    use strict arg rexxObject
 
     buffer~append('{')
     if rexxObject~items == 0 then buffer~append('}')
@@ -146,19 +135,26 @@ return buffer~string
 
 ::method parseRexxString private
     expose buffer eJS
-    use arg rexxObject
+    use strict arg rexxObject, quoted = .false
 
     if rexxObject~length == 0 then buffer~append('""')
     else do
         if rexxObject~dataType('n') then do
-            if arg(2, 'e') then buffer~append('"'rexxObject'"')
+            if quoted then buffer~append('"'rexxObject'"')
             else buffer~append(rexxObject)
         end
         else do
             buffer~append('"')
             do i = 1 to rexxObject~length
                 char = rexxObject~substr(i, 1)
-                if eJS~hasIndex(char) then buffer~append(eJS[char])
+                if char = "\", rexxObject~match(i + 1, "u"), rexxObject~substr(i + 2, 4)~dataType("x") then do
+                    -- balanced with our special handling of \uXXXX escape
+                    -- sequences (keep as-is), we also keep them as-is here
+                    buffer~append(rexxObject~substr(i, 6))
+                    i += 5
+                end
+                else if eJS~hasIndex(char) then buffer~append(eJS[char])
+                else if char <= '1f'x then buffer~append("\u00" || char~c2x)
                 else buffer~append(char)
             end
             buffer~append('"')
@@ -166,23 +162,23 @@ return buffer~string
     end
 
 /**
- * Recursively converts a json string to rexx objects
+ * Recursively converts a JSON text to Rexx objects
  *
- * @param  jsonString   A json string.
+ * @param  jsonString   A JSON text.
  */
 ::method fromJSON
     expose jsonString jsonPos jsonStringLength
     signal on user parseError
-    use arg jsonString
+    use strict arg jsonString
 
     jsonPos = 1
     jsonStringLength = jsonString~length
     self~trimLeadingWhitespace()
     rexxObject = self~parseJSONvalue()
-    if jsonPos >= jsonStringLength then return rexxObject
+    if jsonPos > jsonStringLength then return rexxObject
     else do
         self~trimLeadingWhitespace()
-        if jsonPos >= jsonStringLength then return rexxObject
+        if jsonPos > jsonStringLength then return rexxObject
         message = 'Expected end of input'
         signal extraChars
     end
@@ -192,7 +188,7 @@ parseError:
     c = condition('o')
     message = c['ADDITIONAL'][1]
 extraChars:
-    raise syntax 3.900 array(message 'at' jsonString~substr(jsonPos, 25))
+    raise syntax 93.900 array(message 'at' jsonString~substr(jsonPos, 25)~strip("t"))
 return .nil
 
 /**
@@ -223,7 +219,7 @@ return
 parseError: raise propagate
 
 /**
- * Converts a json object into a rexx directory object.
+ * Converts a JSON object into a Rexx directory object.
  *
  */
 ::method parseJSONobject private
@@ -232,6 +228,7 @@ parseError: raise propagate
 
     rexxDirectory = .directory~new()
 
+    self~trimLeadingWhitespace()
     parse value jsonString with =(jsonPos) char +1
     if char == '}' then do
         jsonPos = jsonPos + 1
@@ -258,14 +255,14 @@ return
 parseError: raise propagate
 
 /**
- * Converts json name:value pairs into a rexx directory item@index.
+ * Converts JSON name:value pairs into a Rexx directory item@index.
  *
- * @param  rexxDirectory   A rexx directory object.
+ * @param  rexxDirectory   A Rexx directory object.
  */
 ::method parseJSONobjectValue private
     expose jsonString jsonPos
     signal on user parseError
-    use arg rexxDirectory
+    use strict arg rexxDirectory
 
     self~trimLeadingWhitespace()
     parse value jsonString with =(jsonPos) char +1
@@ -287,7 +284,7 @@ return
 parseError: raise propagate
 
 /**
- * Converts a json array into a rexx array object.
+ * Converts a JSON array into a Rexx array object.
  *
  */
 ::method parseJSONarray private
@@ -296,6 +293,7 @@ parseError: raise propagate
 
     rexxArray = .array~new()
 
+    self~trimLeadingWhitespace()
     parse value jsonString with =(jsonPos) char +1
     if char == ']' then do
         jsonPos = jsonPos + 1
@@ -322,14 +320,14 @@ return
 parseError: raise propagate
 
 /**
- * Converts a json array values into rexx array items.
+ * Converts a JSON array values into Rexx array items.
  *
- * @param  rexxArray   A rexx array object.
+ * @param  rexxArray   A Rexx array object.
  */
 ::method parseJSONarrayValue private
     expose jsonString
     signal on user parseError
-    use arg rexxArray
+    use strict arg rexxArray
 
     self~trimLeadingWhitespace()
     index = rexxArray~last
@@ -339,7 +337,7 @@ return
 parseError: raise propagate
 
 /**
- * Converts a quoted json string into a rexx string object.
+ * Converts a quoted JSON string into a Rexx string object.
  *
  */
 ::method parseJSONstring private
@@ -352,26 +350,55 @@ parseError: raise propagate
         if char == '\' then do
             parse value jsonString with =(jsonPos) char2 +2
             if uJS~hasIndex(char2) then do
+                -- two-character escape sequences \" \\ \/ \b \f \n \r \t
                 jsonPos = jsonPos + 2
                 rexxString~append(uJS[char2])
             end
+            else if jsonString~match(jsonPos, "\u00") then do
+                -- \u00XX escape sequence is supported
+                hex = jsonString[jsonPos + 4, 2]
+                if hex~length = 2, hex~dataType("x") then do
+                    jsonPos = jsonPos + 6
+                    rexxString~append(hex~x2c)
+                end
+                else
+                    raise user parseError array("Invalid escape sequence")
+            end
+            else if jsonString~match(jsonPos, "\u") then do
+                -- in general \uXXXX escape sequences are not supported
+                -- as ooRexx has no Unicode support
+                -- short of failing, we just just keep any \uXXXX as-is
+                hex = jsonString[jsonPos + 2, 4]
+                if hex~length = 4, hex~dataType("x") then do
+                    jsonPos = jsonPos + 6
+                    rexxString~append("\u", hex)
+                end
+                else
+                    raise user parseError array("Invalid escape sequence")
+            end
             else do
-                jsonPos = jsonPos + 1
-                rexxString~append(char)
+                raise user parseError array("Invalid escape sequence")
             end
         end
-        else do
+        else if char == '"' then do
             jsonPos = jsonPos + 1
-            if char == '"' then return rexxString~string
-            else rexxString~append(char)
+            return rexxString~string
         end
-        if jsonPos >= jsonStringLength then raise user parseError array('Expected end of a quoted string')
+        else do
+            -- append to the string up to the next quote or backslash
+            stop = jsonString~verify('\"', "match", jsonPos)
+            if stop == 0
+                then stop = jsonStringLength + 1
+            rexxString~append(jsonString[jsonPos, stop - jsonPos])
+            jsonPos = stop
+        end
+        if jsonPos > jsonStringLength then raise user parseError array('Expected end of a quoted string')
     end
 return
 parseError: raise propagate
 
 /**
- * Converts other json types into rexx objects.
+ * Converts other JSON types into Rexx objects.
  *
  */
 ::method parseJSONother private
@@ -410,14 +437,11 @@ return
 parseError: raise propagate
 
 /**
- * Removes allowed whitespace between values.
+ * Skips allowed whitespace between values.
  *
  */
 ::method trimLeadingWhitespace private
-    expose jsonString whitespace jsonPos jsonStringLength
-
-    do while jsonPos \== jsonStringLength
-        parse value jsonString with =(jsonPos) char +1
-        if whitespace~hasIndex(char) then jsonPos = jsonPos + 1
-        else leave
-    end
+    expose jsonString jsonPos jsonStringLength
+    jsonPos = jsonString~verify('20 09 0d 0a'x, , jsonPos)
+    if jsonPos == 0
+        then jsonPos = jsonStringLength + 1

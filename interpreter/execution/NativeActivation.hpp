@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -114,7 +114,7 @@ class NativeActivation : public ActivationBase
     stringsize_t unsignedIntegerValue(RexxObject *o, size_t position, stringsize_t maxValue);
     int64_t int64Value(RexxObject *o, size_t position);
     uint64_t unsignedInt64Value(RexxObject *o, size_t position);
-    const char *cstring(RexxObject *);
+    const char *cstring(RexxObject *, size_t position);
     double getDoubleValue(RexxObject *, size_t position);
     bool   isDouble(RexxObject *);
     void  *cself();
@@ -175,6 +175,7 @@ class NativeActivation : public ActivationBase
     bool objectToValue(RexxObject *o, ValueDescriptor *value);
     void createLocalReference(RexxInternalObject *objr);
     void removeLocalReference(RexxInternalObject *objr);
+    void clearLocalReferences();
     void callNativeRoutine(RoutineClass *routine, NativeRoutine *code, RexxString *functionName,
         RexxObject **list, size_t count, ProtectedObject &result);
     void callRegisteredRoutine(RoutineClass *routine, RegisteredRoutine *code, RexxString *functionName,

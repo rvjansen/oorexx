@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -284,11 +284,9 @@ class Activity : public RexxInternalObject
     inline ActivationBase *getTopStackFrame() { return topStackFrame; }
     inline size_t getActivationDepth() { return stackFrameDepth; }
     inline const NumericSettings *getNumericSettings () {return numericSettings;}
-    inline RexxInternalObject *runningRequires(RexxString *program) {return requiresTable->get(program);}
     inline void        addRunningRequires(RexxString *program) { requiresTable->put(program, program);}
     inline void        removeRunningRequires(RexxInternalObject *program) { requiresTable->remove(program);}
-    inline void        resetRunningRequires() { requiresTable->empty();}
-    inline bool        checkRequires(RexxString *n) { return runningRequires(n) != OREF_NULL; }
+           void        checkRequires(RexxString *n);
     inline void        clearRunWait()  { runSem.reset(); dispatchPosted = false; }
     inline void        clearGuardWait()  { guardSem.reset(); }
            uint64_t    getRandomSeed();
@@ -296,6 +294,7 @@ class Activity : public RexxInternalObject
 
     inline RexxThreadContext *getThreadContext() { return &threadContext.threadContext; }
     inline NativeActivation *getApiContext() { return (NativeActivation *)topStackFrame; }
+           void clearLocalReferences();
 
     inline void allocateStackFrame(ExpressionStack *stack, size_t entries)
     {
@@ -322,7 +321,7 @@ class Activity : public RexxInternalObject
     void setExitHandler(int exitNum, REXXPFN e) { getExitHandler(exitNum).setEntryPoint(e); }
     void setExitHandler(int exitNum, const char *e) { getExitHandler(exitNum).resolve(e); }
     void setExitHandler(RXSYSEXIT &e) { getExitHandler(e.sysexit_code).resolve(e.sysexit_name); }
-    RexxString *resolveProgramName(RexxString *, RexxString *, RexxString *);
+    RexxString *resolveProgramName(RexxString *, RexxString *, RexxString *, ResolveType type);
     void createMethodContext(MethodContext &context, NativeActivation *owner);
     void createCallContext(CallContext &context, NativeActivation *owner);
     void createExitContext(ExitContext &context, NativeActivation *owner);

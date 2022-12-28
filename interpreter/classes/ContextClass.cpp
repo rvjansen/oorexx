@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -108,6 +108,7 @@ RexxObject *RexxContext::newRexx(RexxObject **args, size_t argc)
  */
 void RexxContext::live(size_t liveMark)
 {
+    memory_mark(objectVariables);
     memory_mark(activation);
 }
 
@@ -119,6 +120,7 @@ void RexxContext::live(size_t liveMark)
  */
 void RexxContext::liveGeneral(MarkReason reason)
 {
+    memory_mark_general(objectVariables);
     memory_mark_general(activation);
 }
 

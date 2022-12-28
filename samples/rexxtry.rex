@@ -1,13 +1,13 @@
-#!/usr/bin/env rexx
+#!@OOREXX_SHEBANG_PROGRAM@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -37,8 +37,8 @@
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /****************************************************************************/
-/* Name: REXXTRY.REX                                                        */
-/* Type: Object REXX Script                                                 */
+/* Name: rexxtry.rex                                                        */
+/* Type: ooRexx Script                                                      */
 /*                                                                          */
 /*  Loosely derived from an ancient formulation of Mike Cowlishaw.          */
 /*                                                                          */
@@ -111,7 +111,7 @@ clear:
   select                                       /* SAA-portable code.        */
     when abbrev(sysrx,  'Windows') then
       'CLS'                                    /* system to clear screen    */
-    when sysrx = 'LINUX' | sysrx = 'AIX' | sysrx = 'SUNOS' | sysrx = 'MACOS' then
+    when sysrx = 'LINUX' | sysrx = 'AIX' | sysrx = 'SUNOS' | sysrx = 'DARWIN' then
       'clear'                                  /* system to clear screen    */
     otherwise nop                              /* No such command available */
   end; say
@@ -177,7 +177,7 @@ help:                                          /* Request for online help.  */
       say '  Online Help started'
       'start "Rexx Online Documentation"' '"'||value("REXX_HOME",,"ENVIRONMENT")||"\doc\rexxref.pdf"||'"'
     end                                        /* ... for Unix              */
-    when sysrx = AIX | sysrx = LINUX | sysrx = 'SUNOS' then do
+    when sysrx = sysrx = 'LINUX' | sysrx = 'AIX' | sysrx = 'SUNOS' | sysrx = 'DARWIN' then do
       say '  Online help is not installed on' sysrx
       rc = 'Sorry!'
 

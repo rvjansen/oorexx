@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -89,10 +89,6 @@
 **********************************************************************/
 #ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
-
-#if defined( HAVE_LOCALE_H )
-#include <locale.h>
 #endif
 
 #include "oorexxapi.h"
@@ -181,15 +177,6 @@
 #include "RexxUtilCommon.hpp"
 #include "Utilities.hpp"
 #include "RexxInternalApis.h"
-
-#if !defined( HAVE_UNION_SEMUN )
-union semun
-{
-     int val;
-     struct semid_ds *buf;
-     unsigned short *array;
-};
-#endif
 
 #if defined __APPLE__
 #define open64 open
@@ -356,7 +343,7 @@ void TreeFinder::adjustDirectory()
         fileSpec += "*";
     }
     // if the end section is either /. or /.., we also add the wildcard
-    else if (fileSpec.endsWith("/.") || fileSpec.endsWith(".."))
+    else if (fileSpec.endsWith("/.") || fileSpec.endsWith("/.."))
     {
         fileSpec += "/*";
     }
@@ -415,9 +402,10 @@ void formatFileAttributes(TreeFinder *finder, FileNameBuffer &foundFileLine, Sys
 #else
     struct tm *timestamp = localtime(&(attributes.findFileData.st_mtime));
 #endif
+
+    // tm_year is relative to 1900, with full year coverage of 0001 through 9999
     if (finder->longTime())
     {
-
         snprintf(fileAttr, sizeof(fileAttr), "%4d-%02d-%02d %02d:%02d:%02d  ",
                  timestamp->tm_year + 1900, timestamp->tm_mon + 1, timestamp->tm_mday,
                  timestamp->tm_hour, timestamp->tm_min, timestamp->tm_sec);
@@ -425,14 +413,15 @@ void formatFileAttributes(TreeFinder *finder, FileNameBuffer &foundFileLine, Sys
     else if (finder->editableTime())
     {
         snprintf(fileAttr, sizeof(fileAttr), "%02d/%02d/%02d/%02d/%02d  ",
-                 (timestamp->tm_year) % 100, timestamp->tm_mon + 1, timestamp->tm_mday,
+                 (timestamp->tm_year + 10000) % 100, timestamp->tm_mon + 1, timestamp->tm_mday,
                  timestamp->tm_hour, timestamp->tm_min);
     }
     else
     {
         snprintf(fileAttr, sizeof(fileAttr), "%2d/%02d/%02d  %2d:%02d%c  ",
-                 timestamp->tm_mon + 1, timestamp->tm_mday, timestamp->tm_year % 100,
-                 timestamp->tm_hour < 13 ? timestamp->tm_hour : timestamp->tm_hour - 12,
+                 timestamp->tm_mon + 1, timestamp->tm_mday, (timestamp->tm_year  + 10000) % 100,
+                 timestamp->tm_hour < 13 && timestamp->tm_hour != 0 ?
+                  timestamp->tm_hour : abs(timestamp->tm_hour - 12),
                  timestamp->tm_min, (timestamp->tm_hour < 12 || timestamp->tm_hour == 24) ? 'a' : 'p');
     }
 
@@ -459,17 +448,33 @@ void formatFileAttributes(TreeFinder *finder, FileNameBuffer &foundFileLine, Sys
 
     char tp = typeOfEntry(attributes.findFileData.st_mode);
 
+    mode_t st_mode = attributes.findFileData.st_mode;
+
+    // SUID       If set, then replaces "x" in the owner permissions to "s",
+    // if owner has execute permissions, or to "S" otherwise. Examples:
+    // -rws------ both owner execute and SUID are set
+    // -r-S------ SUID is set, but owner execute is not set
+
+    // SGID       If set, then replaces "x" in the group permissions to "s",
+    // if group has execute permissions, or to "S" otherwise. Examples:
+    // -rwxrws--- both group execute and SGID are set
+    // -rwxr-S--- SGID is set, but group execute is not set
+
+    // Sticky  If set, then replaces "x" in the others permissions to "t",
+    // if others have execute permissions, or to "T" otherwise. Examples:
+    // -rwxrwxrwt both others execute and sticky bit are set
+    // -rwxrwxr-T sticky bit is set, but others execute is not set
     snprintf(fileAttr, sizeof(fileAttr), "%c%c%c%c%c%c%c%c%c%c  ",
              tp,
-             (attributes.findFileData.st_mode & S_IREAD) ? 'r' : '-',
-             (attributes.findFileData.st_mode & S_IWRITE) ? 'w' : '-',
-             (attributes.findFileData.st_mode & S_IEXEC) ? 'x' : '-',
-             (attributes.findFileData.st_mode & S_IRGRP) ? 'r' : '-',
-             (attributes.findFileData.st_mode & S_IWGRP) ? 'w' : '-',
-             (attributes.findFileData.st_mode & S_IXGRP) ? 'x' : '-',
-             (attributes.findFileData.st_mode & S_IROTH) ? 'r' : '-',
-             (attributes.findFileData.st_mode & S_IWOTH) ? 'w' : '-',
-             (attributes.findFileData.st_mode & S_IXOTH) ? 'x' : '-');
+             (S_IRUSR & st_mode) ? 'r' : '-',
+             (S_IWUSR & st_mode) ? 'w' : '-',
+             (S_ISUID & st_mode) ? (S_IXUSR & st_mode ? 's' : 'S') : (S_IXUSR & st_mode ? 'x' : '-'),
+             (S_IRGRP & st_mode) ? 'r' : '-',
+             (S_IWGRP & st_mode) ? 'w' : '-',
+             (S_ISGID & st_mode) ? (S_IXGRP & st_mode ? 's' : 'S') : (S_IXGRP & st_mode ? 'x' : '-'),
+             (S_IROTH & st_mode) ? 'r' : '-',
+             (S_IWOTH & st_mode) ? 'w' : '-',
+             (S_ISVTX & st_mode) ? (S_IXOTH & st_mode ? 't' : 'T') : (S_IXOTH & st_mode ? 'x' : '-'));
 
     // add on this section
     foundFileLine += fileAttr;
@@ -1134,33 +1139,49 @@ RexxRoutine2(int, SysSetPriority, int32_t, pclass, int32_t, level)
  *
  * @return The error message text or NULL if not found.
  */
-const char* getErrorMessage(const char *repository, int setnum, int msgnum)
+char* getErrorMessage(const char *repository, int setnum, int msgnum)
 {
     // if this is the default or explicitly "rexx.cat", then we retrieve this
     // directly from the interpreter
-    if (repository == NULL || strcmp(repository, REXXMESSAGEFILE))
+    if (repository == NULL || strcmp(repository, REXXMESSAGEFILE) == 0)
     {
-        return RexxGetErrorMessageByNumber(msgnum);
+        const char *msg = (setnum == 1) ? RexxGetErrorMessageByNumber(msgnum): NULL;
+        if (msg == NULL)
+        {
+            msg = "Error: Message not found";
+        }
+        return strdup(msg);
     }
 #if defined( HAVE_CATOPEN )
 
-#if defined( HAVE_SETLOCALE )
-    setlocale(LC_ALL, "en_US");
-#endif
-    nl_catd catalog;                     /* catalog handle             */
-/* open the catalog           */
-    if ((catalog = catopen(repository, NL_CAT_LOCALE)) == (nl_catd)-1)
+    // if name doesn't contain a '/' catopen() will search along NLSPATH
+    // NLSPATH may contain both %N, which is replaced by the specified
+    // catalog name, and %L, which is replaced by the LANG variable.
+    nl_catd catalog;                     // catalog handle
+
+    if ((catalog = catopen(repository, 0)) == (nl_catd)-1)
     {
-        return "Error: Message catalog not found";
+        return strdup("Error: Message catalog not found");
     }
 
-    char *msg = catgets(catalog, setnum, (int)msgnum, "Error: Message catalog not open");
-    catclose(catalog);                   /* close the catalog          */
+    char *msg = catgets(catalog, setnum, (int)msgnum, "");
+    if (*msg == '\0')
+    {
+        msg = strdup(errno == EBADF ? "Error: Invalid message catalog" : "Error: Message not found");
+    }
+    else
+    {
+        // catgets returns the message in an internal buffer
+        // we need to copy it before closing the catalog
+        msg = strdup(msg);
+    }
+    catclose(catalog);                   // close the catalog
 
-    return *msg == '\0' ? "Error: Message not found" : msg;      // return the message or our error
+    return msg;                          // return the message or our error
+
 #else
     // if no catalog support, we just return an error message
-    return "Error: Message catalog (catopen) not supported";
+    return strdup("Error: Message catalog (catopen) not supported");
 #endif
 }
 
@@ -1183,7 +1204,7 @@ const char* getErrorMessage(const char *repository, int setnum, int msgnum)
 RexxRoutine3(RexxStringObject, SysGetMessage, positive_wholenumber_t, msgnum, OPTIONAL_CSTRING, msgfile, ARGLIST, args)
 {
     // this always uses one for the set number
-    const char *message = getErrorMessage(msgfile, 1, msgnum);
+    AutoFree message = getErrorMessage(msgfile, 1, msgnum);
 
     // go format the message with the substitutions.
     return formatMessage(context, message, args, 3);
@@ -1212,7 +1233,7 @@ RexxRoutine3(RexxStringObject, SysGetMessage, positive_wholenumber_t, msgnum, OP
 RexxRoutine4(RexxStringObject, SysGetMessageX, positive_wholenumber_t, setnum, positive_wholenumber_t, msgnum, OPTIONAL_CSTRING, msgfile, ARGLIST, args)
 {
     // this always uses one for the set number
-    const char *message = getErrorMessage(msgfile, (int)setnum, (int)msgnum);
+    AutoFree message = getErrorMessage(msgfile, (int)setnum, (int)msgnum);
 
     // go format the message with the substitutions.
     return formatMessage(context, message, args, 4);
@@ -1360,46 +1381,36 @@ RexxRoutine2(RexxObjectPtr, SysGetFileDateTime, CSTRING, file, OPTIONAL_CSTRING,
     struct    stat64 buf;
     struct    tm *newtime;
 
-
     RoutineQualifiedName qualifiedName(context, file);
+
+    if (timesel != NULL &&
+        timesel[0] != 'a' && timesel[0] != 'A' &&
+        timesel[0] != 'w' && timesel[0] != 'W')
+    {
+        invalidOptionException(context, "SysGetFileDateTime", "time selector", "'A' or 'W'", timesel);
+    }
 
     if (stat64(qualifiedName, &buf) < 0)
     {
-        return context->Int32ToObject(-1);
+        return context->WholeNumber(-1);
     }
 
-    if (timesel != NULL)
+    if (timesel == NULL || timesel[0] == 'w' || timesel[0] == 'W')
     {
-        switch (timesel[0])
-        {
-            case 'a':
-            case 'A':
-                newtime = localtime(&(buf.st_atime));
-                break;
-            case 'w':
-            case 'W':
-                newtime = localtime(&(buf.st_mtime));
-
-                break;
-            default:
-                invalidOptionException(context, "SysGetFileDateTime", "time selector", "'A' or 'W'", timesel);
-                context->InvalidRoutine();
-                return NULLOBJECT;
-        }
+        // 'w' last modification, this is the default
+        newtime = localtime(&(buf.st_mtime));
     }
     else
     {
-        newtime = localtime(&(buf.st_mtime));
+        // 'a' last access
+        newtime = localtime(&(buf.st_atime));
     }
-
-    newtime->tm_year += 1900;
-    newtime->tm_mon += 1;
 
     char retstr[100];
 
     snprintf(retstr, sizeof(retstr), "%4d-%02d-%02d %02d:%02d:%02d",
-             newtime->tm_year,
-             newtime->tm_mon,
+             newtime->tm_year + 1900,
+             newtime->tm_mon + 1,
              newtime->tm_mday,
              newtime->tm_hour,
              newtime->tm_min,
@@ -1435,6 +1446,8 @@ RexxRoutine3(int, SysSetFileDateTime, CSTRING, filename, OPTIONAL_CSTRING, newda
         return -1;
     }
 
+    // for all cases we need to keep access time as-is
+    timebuf.actime = mktime(localtime(&(buf.st_atime)));
 
     if (newdateSet == NULL && newtimeSet == NULL)
     {
@@ -1447,7 +1460,6 @@ RexxRoutine3(int, SysSetFileDateTime, CSTRING, filename, OPTIONAL_CSTRING, newda
         newtime = localtime(&(buf.st_mtime));
         if (newdateSet != NULL)
         {
-
             /* parse new date */
             if (sscanf(newdateSet, "%4d-%2d-%2d", &newtime->tm_year, &newtime->tm_mon, &newtime->tm_mday) != 3)
             {
@@ -1464,6 +1476,10 @@ RexxRoutine3(int, SysSetFileDateTime, CSTRING, filename, OPTIONAL_CSTRING, newda
                 return -1;
             }
         }
+        // mktime() should determine whether DST is in effect at the
+        // specified time.
+        newtime->tm_isdst = -1;
+
         ltime = mktime(newtime);
         timebuf.modtime = ltime;
 

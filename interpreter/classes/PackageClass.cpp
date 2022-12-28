@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -68,6 +68,32 @@
 
 // singleton class instance
 RexxClass *PackageClass::classInstance = OREF_NULL;
+
+/**
+ * A class to track installation of packages to allow us to catch circular references.
+ */
+class InstallingPackage
+{
+ public:
+     InstallingPackage(RexxActivation *activation, RexxString *packageName)
+     {
+         activity = activation->getActivity();
+         package = packageName;
+
+         // mark us as being in the activity chain
+         activity->addRunningRequires(packageName);
+     }
+
+     ~InstallingPackage()
+     {
+         // we're done processing our requires, remove us from the list
+         activity->removeRunningRequires(package);
+     }
+
+ protected:
+     Activity *activity;       // the activity we're running on
+     RexxString *package;      // the package currently installing
+};
 
 
 /**
@@ -144,7 +170,7 @@ PackageClass *PackageClass::newRexx(RexxObject **init_args, size_t argCount)
     {
         // if no directly provided source, resolve the name in the global context and have the instance
         // load the file.
-        Protected<RexxString> resolvedName = instance->resolveProgramName(nameString, OREF_NULL, OREF_NULL);
+        Protected<RexxString> resolvedName = instance->resolveProgramName(nameString, OREF_NULL, OREF_NULL, RESOLVE_REQUIRES);
         package = instance->loadRequires(activity, nameString, resolvedName);
     }
     // we're creating an in-memory package.  We allow a parent context object to be specified
@@ -222,8 +248,8 @@ void PackageClass::live(size_t liveMark)
     memory_mark(classes);
     memory_mark(resources);
     memory_mark(annotations);
-    memory_mark(loadedPackages);
     memory_mark(unattachedMethods);
+    memory_mark(namespaces);
     memory_mark(loadedPackages);
     memory_mark(installedPublicClasses);
     memory_mark(installedClasses);
@@ -265,8 +291,8 @@ void PackageClass::liveGeneral(MarkReason reason)
     memory_mark_general(classes);
     memory_mark_general(resources);
     memory_mark_general(annotations);
-    memory_mark_general(loadedPackages);
     memory_mark_general(unattachedMethods);
+    memory_mark_general(namespaces);
     memory_mark_general(loadedPackages);
     memory_mark_general(installedPublicClasses);
     memory_mark_general(installedClasses);
@@ -303,8 +329,8 @@ void PackageClass::flatten (Envelope *envelope)
     flattenRef(classes);
     flattenRef(resources);
     flattenRef(annotations);
-    flattenRef(loadedPackages);
     flattenRef(unattachedMethods);
+    flattenRef(namespaces);
     flattenRef(loadedPackages);
     flattenRef(installedPublicClasses);
     flattenRef(installedClasses);
@@ -881,18 +907,19 @@ RoutineClass *PackageClass::findRoutine(RexxString *routineName)
  *
  * @param activity The current activity
  * @param name     The target name
+ * @param type     The resolve type, RESOLVE_DEFAULT or RESOLVE_REQUIRES
  *
  * @return The fully resolved string name of the target program, if one is
  *         located.
  */
-RexxString *PackageClass::resolveProgramName(Activity *activity, RexxString *name)
+RexxString *PackageClass::resolveProgramName(Activity *activity, RexxString *name, ResolveType type)
 {
-    RexxString *fullName = activity->resolveProgramName(name, programDirectory, programExtension);
+    RexxString *fullName = activity->resolveProgramName(name, programDirectory, programExtension, type);
     // if we can't resolve this directly and we have a parent context, then
     // try the parent context.
     if (fullName == OREF_NULL && parentPackage != OREF_NULL)
     {
-        fullName = parentPackage->resolveProgramName(activity, name);
+        fullName = parentPackage->resolveProgramName(activity, name, type);
     }
     return fullName;
 }
@@ -915,7 +942,7 @@ RexxObject *PackageClass::findProgramRexx(RexxObject *name)
 
     // get a fully resolved name for this....we might locate this under either name, but the
     // fully resolved name is generated from this source file context.
-    Protected<RexxString> programName = instance->resolveProgramName(target, programDirectory, programExtension);
+    Protected<RexxString> programName = instance->resolveProgramName(target, programDirectory, programExtension, RESOLVE_DEFAULT);
     if (programName != (RexxString *)OREF_NULL)
     {
         return programName;
@@ -1212,6 +1239,9 @@ void PackageClass::processInstall(RexxActivation *activation)
     // do we have requires to process?
     if (requires != OREF_NULL)
     {
+        // record that we're in an installation chain
+        InstallingPackage installing(activation, programName);
+
         // now loop through the requires items
         size_t count = requires->items();
         for (size_t i = 1; i <= count; i++)
@@ -1263,20 +1293,19 @@ void PackageClass::processInstall(RexxActivation *activation)
 
 /**
  * Load a ::REQUIRES directive when the source file is first
- * invoked.
+ * invoked.  This is also called from method loadPackage.
  *
  * @param target The name of the ::REQUIRES
- * @param instruction
- *               The directive instruction being processed.
+ * @param type   The resolve type, RESOLVE_DEFAULT or RESOLVE_REQUIRES
  */
-PackageClass *PackageClass::loadRequires(Activity *activity, RexxString *target)
+PackageClass *PackageClass::loadRequires(Activity *activity, RexxString *target, ResolveType type)
 {
     // we need the instance this is associated with
     InterpreterInstance *instance = activity->getInstance();
 
     // get a fully resolved name for this....we might locate this under either name, but the
     // fully resolved name is generated from this source file context.
-    RexxString *fullName = resolveProgramName(activity, target);
+    RexxString *fullName = resolveProgramName(activity, target, type);
     ProtectedObject p(fullName);
 
     // if we've already loaded this in this instance, just return it.
@@ -1294,9 +1323,10 @@ PackageClass *PackageClass::loadRequires(Activity *activity, RexxString *target)
 
 
 /**
- * Load a ::REQUIRES directive from an provided source target
+ * Load a ::REQUIRES directive from a provided source target
  *
  * @param target The name of the ::REQUIRES
+ * @param s      An array of source lines
  */
 PackageClass *PackageClass::loadRequires(Activity *activity, RexxString *target, ArrayClass *s)
 {
@@ -1807,7 +1837,7 @@ PackageClass *PackageClass::loadPackageRexx(RexxString *name, ArrayClass *s)
     // if no source provided, this comes from a file
     if (s == OREF_NULL)
     {
-        return loadRequires(ActivityManager::currentActivity, packageName);
+        return loadRequires(ActivityManager::currentActivity, packageName, RESOLVE_REQUIRES);
     }
     else
     {
@@ -2091,13 +2121,9 @@ void PackageClass::runProlog(Activity *activity)
     {
         ProtectedObject dummy;
 
-        // make sure we add a reference to the circular reference stack
-        activity->addRunningRequires(getProgramName());
         // if we have initcode, then by definition, the leading section has been created as
         // a routine.
         ((RoutineClass *)mainExecutable)->call(activity, getProgramName(), NULL, 0, GlobalNames::REQUIRES, OREF_NULL, EXTERNALCALL, dummy);
-        // No longer installing routine.
-        activity->removeRunningRequires(getProgramName());
     }
     // no prolog, but we still need to perform the installation process.
     else

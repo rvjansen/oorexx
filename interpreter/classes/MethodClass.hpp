@@ -6,7 +6,7 @@
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -97,7 +97,6 @@ class MethodClass : public BaseExecutable
     void         run(Activity *,  RexxObject *, RexxString *,  RexxObject **, size_t, ProtectedObject &);
     MethodClass *newScope(RexxClass  *);
     void         setScope(RexxClass  *);
-    SmartBuffer  *saveMethod();
     RexxObject  *setUnguardedRexx();
     RexxObject  *setGuardedRexx();
     RexxObject  *setPrivateRexx();
@@ -139,6 +138,9 @@ class MethodClass : public BaseExecutable
     inline bool  isScope(RexxClass *s) {return scope == s;}
 
     inline BaseCode  *getCode()     { return code; }
+
+    static MethodClass* restore(RexxString *fileName, BufferClass *buffer);
+
     MethodClass  *newRexx(RexxObject **, size_t);
     MethodClass  *newFileRexx(RexxString *, PackageClass *);
     MethodClass  *loadExternalMethod(RexxString *methodName, RexxString *descriptor);

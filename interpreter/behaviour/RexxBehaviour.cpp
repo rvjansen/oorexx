@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2014 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
 /* distribution. A copy is also available at the following address:           */
-/* http://www.oorexx.org/license.html                                         */
+/* https://www.oorexx.org/license.html                                        */
 /*                                                                            */
 /* Redistribution and use in source and binary forms, with or                 */
 /* without modification, are permitted provided that the following            */
@@ -101,6 +101,10 @@ RexxBehaviour::RexxBehaviour(ClassTypeCode newTypenum, PCPPM *operator_methods)
  */
 void RexxBehaviour::live(size_t liveMark)
 {
+    // This is an object that is in the image itself, so is is already
+    // protected from collection:
+    // primitiveBehaviours
+
     memory_mark(methodDictionary);
     memory_mark(owningClass);
 }
@@ -114,15 +118,22 @@ void RexxBehaviour::live(size_t liveMark)
 void RexxBehaviour::liveGeneral(MarkReason reason)
 {
     // special handling if marking during a save image.
-    if (reason == SAVINGIMAGE && isNonPrimitive())
+    if (reason == SAVINGIMAGE)
     {
-        // mark this as needing resolution when restored.
-        setNotResolved();
+        // if non primitive, this will need extra processing during restore.
+        if (isNonPrimitive())
+        {
+            // mark this as needing resolution when restored.
+            setNotResolved();
+        }
+        // even though we re-resolve this on restore, we null this out so what
+        // we create a consistent image build
+        operatorMethods = NULL;
     }
     // the other side of the process?
     else if (reason == RESTORINGIMAGE)
     {
-        // if we have a non-primitive here on a restore image, we need to fix this up.
+    // if we have a non-primitive here on a restore image, we need to fix this up.
         if (isNonPrimitive())
         {
             resolveNonPrimitiveBehaviour();
