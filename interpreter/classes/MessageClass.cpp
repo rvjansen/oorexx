@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -81,7 +81,7 @@ void MessageClass::createInstance()
 }
 
 
-// TODO:  There are no tests for the message class.
+// Tests defined in test/trunk/ooRexx/base/class/Message.testGroup
 
 /**
  * Create a new message object.
@@ -537,6 +537,10 @@ RexxObject *MessageClass::start()
     // spawn a new activity off of the old activity
     Activity *oldActivity = ActivityManager::currentActivity;
     Activity *newActivity = oldActivity->spawnReply();
+
+    // save current frame info in a StringTable as it has caused the creation of a new activity
+    Activity::setCallerStackFrameAsStringTable(oldActivity, newActivity, true); // create stackframe from parent/caller
+
     // mark which activity we're running on, then dispatch the message
     // on the new activity (which is sitting waiting for work to perform)
     setField(startActivity, newActivity);

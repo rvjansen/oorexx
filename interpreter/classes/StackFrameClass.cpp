@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -88,8 +88,10 @@ void *StackFrameClass::operator new(size_t size)
  * @param a      Arguments to the method/routine.
  * @param t      A tracing line.
  * @param l      The frame line position (MAX_SIZE indicates no line available).
+ * @param i      The invocation id.
+ * @param c      The context object.
  */
-StackFrameClass::StackFrameClass(const char *ty, RexxString *n, BaseExecutable *e, RexxObject *tg, ArrayClass *a, RexxString *t, size_t l)
+StackFrameClass::StackFrameClass(const char *ty, RexxString *n, BaseExecutable *e, RexxObject *tg, ArrayClass *a, RexxString *t, size_t l, uint32_t i, RexxObject *c)
 {
     type = ty;
     name = n;
@@ -104,6 +106,8 @@ StackFrameClass::StackFrameClass(const char *ty, RexxString *n, BaseExecutable *
     arguments = a;
     traceLine = t;
     line = l;
+    invocation = i;     // supplied by RexxActivation
+    context = c;        // supplied by RexxActivation
 }
 
 
@@ -136,6 +140,7 @@ void StackFrameClass::live(size_t liveMark)
     memory_mark(arguments);
     memory_mark(target);
     memory_mark(objectVariables);
+    memory_mark(context);
 }
 
 void StackFrameClass::liveGeneral(MarkReason reason)
@@ -149,6 +154,7 @@ void StackFrameClass::liveGeneral(MarkReason reason)
     memory_mark_general(arguments);
     memory_mark_general(target);
     memory_mark_general(objectVariables);
+    memory_mark_general(context);
 }
 
 void StackFrameClass::flatten(Envelope *envelope)
@@ -164,6 +170,7 @@ void StackFrameClass::flatten(Envelope *envelope)
     newThis->arguments = OREF_NULL;
     newThis->target = OREF_NULL;
     newThis->objectVariables = OREF_NULL;
+    newThis->context = OREF_NULL;
 
     cleanUpFlatten
 }
@@ -214,6 +221,7 @@ RexxObject *StackFrameClass::getExecutable()
     return resultOrNil(executable);
 }
 
+
 /**
  * Return the execution context current line position.
  *
@@ -228,6 +236,24 @@ RexxObject *StackFrameClass::getLine()
     else
     {
         return new_integer(line);
+    }
+}
+
+
+/**
+ * Return the invocation id.
+ *
+ * @return The current invocation id.
+ */
+RexxObject *StackFrameClass::getInvocation()
+{
+    if (invocation == 0)
+    {
+        return TheNilObject;
+    }
+    else
+    {
+        return new_integer(invocation);
     }
 }
 
@@ -284,6 +310,16 @@ RexxObject *StackFrameClass::getTarget()
 RexxString *StackFrameClass::stringValue()
 {
     return getTraceLine();
+}
+
+ /**
+ * Return the context object.
+ *
+ * @return The current context object.
+ */
+RexxObject *StackFrameClass::getContext()
+{
+    return resultOrNil(context);
 }
 
 /**

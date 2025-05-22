@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2023 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -64,7 +64,6 @@ void * DoBlock::operator new(size_t size)
  * Construct a runtime DO block instance.
  *
  * @param _parent The instruction this represents.
- * @param _indent The current trace indentation level.
  */
 DoBlock::DoBlock(RexxActivation *context, RexxBlockInstruction *_parent)
 {
@@ -119,13 +118,12 @@ void DoBlock::liveGeneral(MarkReason reason)
  * Handle a new iteration of a loop, with setting of the counter variable, if required.
  *
  * @param context The current execution context,
- * @param v       The counter variable (if any) to set.
  */
 void DoBlock::setCounter(RexxActivation *context)
 {
     if (countVariable != OREF_NULL)
     {
-        // assign the control variable and trace this result
+        // assign the COUNTER variable and trace this result
         Protected<RexxObject> c =  Numerics::uint64ToObject(counter);
         countVariable->assign(context, c);
         context->traceKeywordResult(GlobalNames::COUNTER, c);
@@ -183,7 +181,7 @@ bool DoBlock::checkOver(RexxActivation *context, ExpressionStack *stack)
  */
 bool DoBlock::checkControl(RexxActivation *context, ExpressionStack *stack, bool increment)
 {
-    RexxObject *result = OREF_NULL;
+    Protected<RexxObject> result = (RexxObject *)OREF_NULL;
 
     // if this is time to increment the value, perform the plus operation
     // to add in the BY increment.
@@ -191,8 +189,10 @@ bool DoBlock::checkControl(RexxActivation *context, ExpressionStack *stack, bool
     {
         // get the control variable value and trace
         result = control->evaluate(context, stack);
+        context->traceResult(result);
         // increment using the plus operator
         result = result->callOperatorMethod(OPERATOR_PLUS, by);
+        context->traceResult(result); // trace if necessary
 
         // the control variable gets set immediately, and and the assignment will also get traced
         // increment result

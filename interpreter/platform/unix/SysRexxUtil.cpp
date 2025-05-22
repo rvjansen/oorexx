@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -93,13 +93,11 @@
 
 #include "oorexxapi.h"
 
-#if defined( HAVE_SYS_WAIT_H )
-#include <sys/wait.h>
-#endif
-
+#include <sys/wait.h>                  // wait()
 #include <sys/ipc.h>
 #include <memory.h>
 
+// not available on macOS and BSDs
 #if defined( HAVE_MALLOC_H )
 #include <malloc.h>
 #endif
@@ -113,21 +111,16 @@
 #include <limits.h>
 #include <math.h>
 #include <limits.h>
-#include <sys/stat.h>                  /* mkdir() function           */
-#include <errno.h>                     /* get the errno variable     */
+#include <sys/stat.h>                  // mkdir()
+#include <errno.h>                     // errno variable
 #include <stddef.h>
 #include <sys/types.h>
-#if !defined(AIX)
-#include <sys/syscall.h>
-#endif
-#include <sys/utsname.h>
-#include <sys/ipc.h>
+#include <sys/utsname.h>               // uname()
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <time.h>
 #include <netdb.h>
-
 
 #if defined( HAVE_SYS_SEM_H )
 #include <sys/sem.h>
@@ -151,12 +144,6 @@
 #endif
 
 #include <utime.h>                /* moved, used by AIX & Linux          */
-
-#if defined( HAVE_SYS_UTSNAME_H )
-#include <sys/utsname.h>               /* get the uname() function   */
-#endif
-
-#include <signal.h>
 
 #if defined( HAVE_SYS_RESOURCE_H )
 #include <sys/resource.h>              /* get the getpriority() func */
@@ -540,7 +527,7 @@ int TreeFinder::findDirectoryEnd()
     int lastSlashPos = (int)fileSpec.length() - 1;
 
     // Step back through fileSpec until at its beginning or at a '/' character
-    while (fileSpec.at(lastSlashPos) != '/' && lastSlashPos >= 0)
+    while (lastSlashPos >= 0 && fileSpec.at(lastSlashPos) != '/')
     {
         --lastSlashPos;
     }
@@ -1087,47 +1074,19 @@ RexxRoutine1(int, SysCloseMutexSem, uintptr_t, vhandle)
 /*************************************************************************
 * Function:  SysSetPriority                                              *
 *                                                                        *
-* Syntax:    result = SysSetPriority(Class, Level)                       *
+* Syntax:    result = SysSetPriority([cls], prio)                        *
 *                                                                        *
-* Params:    Class  - The priority class (0-4)                           *
-*            Level  - Amount to change (-31 to +31)                      *
+* Params:    cls    - ignored                                            *
+*            prio   - scheduling priority -19 to 20 (negative "nice")    *
 *                     (lower to higher priority)                         *
-* Return:    0    for correct execution                                  *
-*            304  for ERROR_INVALID_PDELTA                               *
-*            307  for ERROR_INVALID_PCLASS                               *
-*            derived from:                                               *
-*            result - return code from DosSetPriority                    *
+* Return:    0    success                                                *
+*            >0   errno from setpriority() failure                       *
 *                                                                        *
 *************************************************************************/
-RexxRoutine2(int, SysSetPriority, int32_t, pclass, int32_t, level)
+RexxRoutine2(int, SysSetPriority, OPTIONAL_int32_t, cls, int32_t, prio)
 {
-    RexxReturnCode    rc;                        /* creation return code                */
-
-    if (pclass == 0)                        /* class 0 -> no change               */
-    {
-        rc = 0;                             /* no error                           */
-    }
-    /* change the priority                */
-    /* change according to delta          */
-    else if (pclass > 0 && pclass <= 4)
-    {
-        int pid = getpid();                     /* current PID                        */
-
-        /* current priority                   */
-        int priority = getpriority(PRIO_PROCESS, getpid());
-
-        /* Set new priority                   */
-        setpriority(PRIO_PROCESS, getpid(), -level);
-        rc = 0;
-    }
-
-    else
-    {
-        context->InvalidRoutine();
-        return 0;
-    }
-
-    return rc;
+    // priority is the negated prio argument
+    return setpriority(PRIO_PROCESS, 0, -prio) == 0 ? 0 : errno;
 }
 
 /**

@@ -1,6 +1,6 @@
 			Readme_ooRexx5.txt
 
-Copyright 2005-2022 Rexx Language Association.  All rights reserved.
+Copyright 2005-2025 Rexx Language Association.  All rights reserved.
 
 ===================================================================
 
@@ -22,7 +22,8 @@ How To install ooRexx 5 on macOS as a permanent single user installation
 
 1. Copy the latest ooRexx5 image (.dmg file) from Sourceforge to the desktop
    or to a folder. The image name will show version and revision such as
-   ooRexx-5.0.0-12317.macOS.arm64.x86_64.
+   oorexx-5.1.0-12966.macos.arm64.x86_64. This installer will work on both
+   Intel (x86_64) and Apple Silicon M1/M2/M3/M4 etc (arm64) hardware.
 
 2. Mount the image by double clicking on it.
 
@@ -34,6 +35,10 @@ For 10.14 Mojave and before:
 For 10.15 Catalina and higher:
 4b. Add "export PATH=/Applications/ooRexx5/bin:$PATH" to .zshrc
 (This is dependent on what shell you are using for default).
+
+4c. For any other user of the same machine do the same on that users account.
+    All user accounts on the same machine can refer to the same ooRexx installation
+    in /Applications.
 
 5. On at least Mojave and beyond Apple has decided to set a "Quarantine"
 extended attribute on files downloaded from the Internet. Check if
@@ -54,7 +59,7 @@ rexx (show syntax)
 
 rexx /Applications/ooRexx5/share/ooRexx/samples/rexxcps (benchmark)
 
-7. To uninstall just drag the folder /ooRexx5  in /Applications to the
+7. To uninstall just drag the "App"/folder ooRexx5 in /Applications to the
 garbage bin and remove the export line from .bash_profile or .zshrc.
 
 NOTE: .bash_profile and .zshrc are invisible files that resides in each users
@@ -62,7 +67,7 @@ home folder, to see it press shift command . (dot or period character),
 all 3 at the same time.
 
 If you do not have .bash_profile enter touch .bash_profile in a terminal
-window to create it. Same for .zshrc if you are using Catalina.
+window to create it. Same for .zshrc if you are using Catalina or later.
 
 PLEASE ALSO NOTE:
 ooRexx 5 can be installed anywhere, without any elevated rights, i.e. it is

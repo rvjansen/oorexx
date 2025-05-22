@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -1618,29 +1618,24 @@ return left~caselessCompareTo(right, start, length)
 /* ******************************** */
 /*    T I C K E R      C L A S S    */
 /* ******************************** */
- /**************************************************************************/
- /* The Ticker class provides timer that will trigger an event over an     */
- /* interval.                                                              */
- /**************************************************************************/
 
-::CLASS 'Ticker' SUBCLASS object Public
+-- Ticker sends notification messages to a notification target each time
+-- the trigger interval expires and when the trigger is cancelled.
+::class Ticker public
 
 -- initialize a ticker object
 ::METHOD init
- expose timer canceled target attachment timerStarted eventSemHandle interval
- timer = 0
+ expose canceled target attachment eventSemHandle interval
  eventSemHandle = 0
- timerStarted = 0
  canceled = .false
  use strict arg interval, target, attachment = .nil
 
- -- this must be an object that implements the alarm notification interface
- if \target~isA(.AlarmNotification) then
-   raise syntax 88.914 array ("target", .AlarmNotification~id)
+ -- the notification target must implement the AlarmNotification interface
+ .Validate~classType("target", target, .AlarmNotification)
 
  numeric digits 18                     -- we'll be doing math with large numbers potentially
  if interval~isA(.TimeSpan) then nop   -- already in timespan form?  everything is set up
- -- just a seconds specification convert to a timespace
+ -- just a seconds specification?  convert to a Timespan
  else if datatype(interval, 'N') then do
    interval = .timespan~fromSeconds(interval)
  end
@@ -1656,9 +1651,9 @@ return left~caselessCompareTo(right, start, length)
  alarmtime = interval~totalMicroseconds - .TimeSpan~fromDays(numdays)~totalMicroseconds
 
  -- the remainder needs to be in milliseconds
- alarmtime %= 1000
+ alarmtime = (alarmtime + 500) % 1000
 
- self~!createTimer
+ self~!createTimer -- sets timerStarted to .true and the eventSemHandle pointer
 
  -- release the guard lock and go concurrent
  guard off
@@ -1677,8 +1672,6 @@ return left~caselessCompareTo(right, start, length)
     end
     guard off -- allow cancel() to eventually run
  end
- -- indicate this is cleared
- eventSemHandle = 0;
  exit
 
 -- read-only access to the attachment object.
@@ -1688,6 +1681,7 @@ return left~caselessCompareTo(right, start, length)
 ::attribute canceled GET UNGUARDED
 ::method cancelled UNGUARDED
   expose canceled
+  use strict arg
   return canceled
 
 ::METHOD !createTimer PRIVATE unguarded EXTERNAL 'LIBRARY REXX ticker_createTimer'
@@ -1696,243 +1690,21 @@ return left~caselessCompareTo(right, start, length)
 
 -- cancel a ticker
 ::METHOD cancel unguarded
- expose canceled eventSemHandle timerStarted target
+ expose canceled eventSemHandle target
  use strict arg
 
- -- wait until the timer is actually set
- guard off when timerStarted
+ if eventSemHandle == 0 then
+   return
 
  -- indicate we're canceled and stop the timer
  canceled = .true
  self~!stopTimer(eventSemHandle)
- -- notify the alarm target
+ -- indicate this is cleared
+ eventSemHandle = 0
+ -- notify the Ticker target
  target~cancel(self)
 
 
-
-
-/*
-   name:    CircularQueue.rex
-   purpose: allow to use a circular queue (buffer) of predefined size; if queue is full
-            new entries overwrite existing ones in a circular fashion; also allows for
-            resizing the circular queue at runtime
-
-   documentation:
-
-   The CircularQueue class
-   =======================
-
-      This is a collection class which allows for storing objects in a circular queue
-      of a predefined size. Once the end of the queue has been reached, new item
-      objects are inserted from the beginning, replacing earlier entries.
-
-      The collected objects can be processed in FIFO (first in, first out) or in a
-      stack-like LIFO (last in, first out) order.
-
-
-
-   OF (Class Method)
-   =================
-
-          +-,----+
-          v      |
-   >>-OF(---item-+-)--------------------------<<
-
-   Returns a newly created CircularQueue object containing the specified item
-   objects in the order specified. The number of listed items determines the
-   size of the circular queue.
-
-
-   INIT
-   ====
-
-   >>-INIT(size)----------------------------------<<
-
-   Constructor method invoked by the NEW method, which determines the size of
-   the circular queue.
-
-
-   MAKEARRAY
-   =========
-                 +-Fifo-----+
-   >>-MAKEARRAY(-+----------+-)----------------------<<
-                 +-,-order--+
-
-   Returns a single-index array containing the items of the circular queue in the
-   specified order.
-
-   The following orders can be used. (Only the capitalized letter is needed; all
-   characters following it are ignored.)
-
-   Fifo
-      "first-in, first-out", default
-
-   Lifo
-      stacklike, "last-in, first-out"
-
-
-   PUSH
-   ====
-
-   >>-PUSH(item)----------------------------------<<
-
-   Makes the object item a member item of the circular queue, inserting the item
-   object in front of the first item in the queue. The pushed item object will be
-   the new first item in the circular queue.
-
-   If the circular queue is full, than the last item stored in the circular queue
-   will be deleted, before the insertion takes place. In this case the deleted item
-   will be returned, otherwise .nil.
-
-
-
-   QUEUE
-   =====
-
-   >>-QUEUE(item)---------------------------------<<
-
-   Makes the object item a member item of the circular queue, inserting the item
-   at the end of the circular queue.
-
-   If the circular queue is full, than the first item will be deleted, before the
-   insertion takes place. In this case the deleted item will be returned, otherwise .nil.
-
-
-
-   RESIZE
-   ======
-
-                      +-Fifo-----+
-   >>-RESIZE(-newSize-+----------+-)----------------------<<
-                      +-,-order--+
-
-   Resizes the circular queue object to be able to contain "newSize" items.
-   If the previous size was larger than "newSize", than the now superfluous
-   items are removed in the specified order.
-
-   The following orders can be used. (Only the capitalized letter is needed; all
-   characters following it are ignored.)
-
-   Fifo
-      "first-in, first-out", default: keeps the newest entries
-
-   Lifo
-      stacklike, "last-in, first-out": keeps the oldest entries
-
-   Note: resizing with a value of "0" effectively removes all items from the
-   circular queue.
-
-
-   SIZE
-   =====
-
-   >>-SIZE----------------------------------------<<
-
-   Returns the maximum number of objects that can be stored in the circular queue.
-
-
-
-   SUPPLIER
-   =========
-                +-Fifo-----+
-   >>-SUPPLIER(-+----------+-)----------------------<<
-                +-,-order--+
-
-   Returns a supplier object for the collection. After you have obtained a supplier,
-   you can send it messages (see The Supplier Class) to enumerate all the items
-   that were in the circular queue at the time of the supplier's creation.
-
-   The supplier will enumerate the items in the specified order. (Only the capitalized
-   letter is needed; all characters following it are ignored.)
-
-   Fifo
-      "first-in, first-out", default
-
-   Lifo
-      stacklike, "last-in, first-out"
-
-
-   STRING
-   ======
-              +-----","---+  +-Fifo----+
-   >>-STRING(-+-----------+--+---------+-)---------<<
-              +-delimiter-+  +-,-order-+
-
-   Returns a string object that concatenates the string values of the collected
-   item objects, using the delimiter string to delimit them, in the specified order.
-
-   If the delimiter string argument is omitted the comma character is used as the
-   default delimiter string.
-
-   The following orders can be used. (Only the capitalized letter is needed;
-   all characters following it are ignored.)
-
-   Fifo
-      "first-in, first-out", default
-
-   Lifo
-      stacklike, "last-in, first-out"
-
-   --------------- CircularQueue example --------------
-
-      -- create a circular buffer with five items
-   u=.circularQueue~of("a", "b", "c", "d", "e")
-   say "content: ["u"]," "content (LIFO): ["u~string("->","L")"]"
-   say
-
-   u~resize(4, "FIFO")     -- resize fifo-style (keep newest)
-   say "after resizing to 4 items in FIFO style (keeping the newest):"
-   say "content: ["u"]," "content (LIFO): ["u~string("->","L")"]"
-   say
-
-   u~resize(2, "LILO")     -- resize lifo-style (keep oldest)
-   say "after resizing to 2 items in LIFO style (keeping the oldest):"
-   say "content: ["u"]," "content (LIFO): ["u~string("->","L")"]"
-   say
-
-   u~resize(0)             -- resize lifo-style (keep oldest)
-   say "after resizing to 0 items, thereby deleting all items:"
-   say "content: ["u"]," "content (LIFO): ["u~string("->","L")"]"
-   say
-
-   u~resize(2)             -- resize lifo-style (keep oldest)
-   say "after resizing to 2, size="u~size "and items="u~items
-   u~~queue('x')~~queue('y')~~queue('z')
-   say "after queuing the three items 'x', 'y', 'z':"
-   say "content: ["u"]," "content (LIFO): ["u~string("->","L")"]"
-   say
-
-   u~~push('1')~~push('2')~~push('3')
-   say "after pushing the three items '1', '2', '3':"
-   say "content: ["u"]," "content (LIFO): ["u~string("->","L")"]"
-   say
-
-
-/*
-Output:
-
-   content: [a,b,c,d,e], content (LIFO): [e->d->c->b->a]
-
-   after resizing to 4 items in FIFO style (keeping the newest):
-   content: [b,c,d,e], content (LIFO): [e->d->c->b]
-
-   after resizing to 2 items in LIFO style (keeping the oldest):
-   content: [b,c], content (LIFO): [c->b]
-
-   after resizing to 0 items, thereby deleting all items:
-   content: [], content (LIFO): []
-
-   after resizing to 2, size=2 and items=0
-   after queuing the three items 'x', 'y', 'z':
-   content: [y,z], content (LIFO): [z->y]
-
-   after pushing the three items '1', '2', '3':
-   content: [3,2], content (LIFO): [2->3]
-
-*/
-
-
-*/
 
    -- circular buffer (round-robin queue) of a defined size
 ::CLASS 'CircularQueue' subclass queue public
@@ -4207,3 +3979,209 @@ nomethod:
      s=result           -- fetch & save the returned instance
   end
   return s              -- return singleton instance
+
+
+/** This class maintains trace information meant to support debugging and analyzing
+*   execution traces. The makeString method will return a string that will be formatted
+*   according to the current setting of the OPTION class attribute. If the COLLECTOR
+*   class attribute is not .nil then the traceObject will be appended to it.
+*
+*/
+::class "TraceObject" subclass StringTable public
+
+---------------------- class level ----------------------
+::method    activate    class
+  expose option collector counter makeStringMethod
+  self~activate:super
+  option   ='N'         -- normal (makeString returns the TRACELINE entry)
+  collector=.nil        -- no appending to the collector will take place
+  makeStringMethod = .nil
+  counter  =0           -- value will be used to number the TraceObject instances
+
+::method    new         class    -- a new instance gets requested
+  expose option collector counter
+  dt = .dateTime~new    -- take the current date and time
+  forward class (super) continue -- let the superclass do the job
+  newObj = result       -- fetch freshly created object
+  newObj["TIMESTAMP"]=dt
+  newObj["OPTION"]   =option
+  counter += 1
+  newObj["NUMBER"]   =counter
+  if \collector~isNil then -- collector exists, append traceObject
+     collector~append(newObj)
+  return newObj         -- return the new object
+
+::attribute collector   class       -- .nil or an object that does understand APPEND(object)
+
+::attribute counter     get class   -- we only allow get access
+
+::attribute option      set class
+  expose option
+  parse upper arg o +1  -- extract first letter
+  pos=pos(o,"NTSFP")    -- option letter in hand? (Normal, Thread, Standard, Full, Profiling)
+  if pos>0 then         -- valid option, use it
+     option=o
+  else                  -- unknown option, raise condition
+     raise syntax 93.914 array (1, '"N" (normal), "T" (thread), "S" (standard), "F" (full) or "P" (profiling)', arg(1))
+
+::attribute option      get class
+
+::method setMakeString  class -- allow replacing the predefined makeStringImpl method
+  expose makeStringMethod
+  use strict arg newMethod
+  if newMethod~isA(.method) then    -- a method object already
+     makeStringMethod=newMethod
+  else   -- create and save method object for performance
+  do
+     signal on syntax   -- create method object from newMethod and save it
+     makeStringMethod=.method~new("newMakeStringMethod", newMethod)
+  end
+  return
+
+syntax:
+  raise propagate       -- propagate the error
+
+::method unsetMakeString  class  -- allow replacing the predefined makeStringImpl method
+  expose makeStringMethod
+  use strict arg
+  makeStringMethod = .nil        -- cancel this out
+
+
+/** Create the traceline string, if option:
+*     'N' ... just return the traceline (default)
+
+*     'T' ... inserts the thread in the trace prefix after the second character ... thread
+
+*     'S' ... return prefix [T1  I1  ]          ... thread, invocation
+*                           [T1  I1  Gu A1  L1  *W] ... thread, invocation, guarded/unguarded, lockcount, hasObjectLock
+
+*     'F' ... return prefix [R1   T1   I1   ]... interpreter, thread, invocation
+                          for a method statement:
+*                           [R1   T1   I1   Gu A1   L1   *W] ... interpreter, thread, invocation, guarded/unguarded, attribute pool, lockcount, hasObjectLock
+
+*     'P' ... will cause ooRexx to not forward the traceObject (this option is meant for profiling);
+              if set while makeString gets invoked via a Rexx program, then makeString will
+              format the traceline with the option in effect of creating the TraceObject (if still
+              'P', then use 'N' formating)
+*/
+::method makeStringImpl class    -- the formatting method
+  expose option makeStringMethod
+  use strict arg traceObj
+
+  -- this is customizable, so check first for the override
+  if makeStringMethod \= .nil then do
+    return self~run(makeStringMethod, 'Individual', traceObj)  -- run it directly on ourselves
+  end
+
+  tmpOption=option         -- get current option
+
+  if tmpOption='P' then    -- currently profiling/probing, use original option if not 'P'
+  do
+     oriOption=str(traceObj["OPTION"])     -- get original option, if also 'P', then use 'N' formatting
+     if oriOption='?' then -- OPTION entry does not exist, resort to 'N' formatting
+        tmpOption='N'      -- if no option available, format as normal
+     else      -- if original option is P as well then format as normal, otherwise as original option
+        tmpOption=(oriOption='P')~?('N',oriOption)
+  end
+
+  if tmpOption='N' then return str(traceObj["TRACELINE"])
+
+  if tmpOption='T' then
+  do
+     parse value traceObj~traceline with line 7 prefix rest
+     return line prefix~insert(traceObj["THREAD"],2) rest
+  end
+
+  mb = .MutableBuffer~new  -- for performance reasons
+  mb~append("[")
+  if tmpOption='S' then
+  do
+     mb~append("T", adjLeft(str(traceObj["THREAD"])    ,2), " ")  -- T_hread/activity
+     mb~append("I", adjLeft(str(traceObj["INVOCATION"]),2)     )  -- I_nvocation/activation
+  end
+  else -- if tmpOption='F' then
+  do
+     mb~append("R", adjLeft(str(traceObj["INTERPRETER"]),3), " ") -- R_exx interpreter instance
+     mb~append("T", adjLeft(str(traceObj["THREAD"])     ,3), " ") -- T_hread/activity
+     mb~append("I", adjLeft(str(traceObj["INVOCATION"]) ,4)     ) -- I_nvocation/activation
+  end
+
+  ap=traceObj["ATTRIBUTEPOOL"]
+  if \ap~isNil then        -- an object's variable dictionary in hand, we are in a method
+  do
+     mb~append(" ")
+     isGuarded   =str(traceObj["ISGUARDED"])
+     hasScopeLock=str(traceObj["HASSCOPELOCK"])
+
+     if isGuarded='?' then
+        mb~append(isGuarded)              -- ? (if not set), else G_uarded or U_unguarded
+     else
+        mb~append(isGuarded~?("G","U"))   -- method defined G_uarded or U_unguarded
+
+     -- if current scope is not the method's defined one, indicate it
+     if      isGuarded=.true,  hasScopeLock=.false then mb~append('u ')
+     else if isGuarded=.false, hasScopeLock=.true  then mb~append('g ')
+     else mb~append("  ")
+
+     if tmpOption='S' then
+     do
+        mb~append("A", adjLeft(ap,2), " ")  -- Attribute pool (variable dictionary)
+        mb~append("L", adjLeft(str(traceObj["SCOPELOCKCOUNT"]),2), " ") -- L ... lock reserve count
+     end
+     else -- if tmpOption='F' then
+     do
+        mb~append("A", adjLeft(ap,4), " ")  -- Attribute pool (variable dictionary)
+        mb~append("L", adjLeft(str(traceObj["SCOPELOCKCOUNT"]),3), " ") -- L ... lock reserve count
+     end
+
+     if hasScopeLock='?' then
+        mb~append(hasScopeLock)              -- indicates that value is not present
+     else
+     do
+        mb~append(hasScopeLock~?("*"," "))   -- asterisk to indicate holding object lock (can execute)
+        if traceObj~hasEntry("ISWAITING") then
+           mb~append((traceObj["ISWAITING"]=.true)~?("W"," "))
+        else
+           mb~append(" ")
+     end
+
+     mb~append("] ")
+  end
+  else   -- no object related information in this traceObject
+  do
+     if tmpOption='S' then
+        mb~append("]               ")     -- Standard: make sure we align traceline
+     else -- if tmpOption='F' then
+        mb~append("]                  ")  -- Full: make sure we align traceline
+  end
+
+  mb~append(str(traceObj["TRACELINE"]))
+  return mb~string   -- return trace line with mtPrefix
+
+
+adjLeft: procedure   -- left adjust, but make sure we show all chars
+  use arg value, width
+  if value~length>=width then -- no left adjustment
+     return value
+  return value~left(width)    -- left adjust with given width
+
+str: procedure       -- make sure we supply a string if .nil, otherwise MutableBuffer causes an error
+  use arg value
+  if value~isNil then return '?' -- no entry, Rexx user omitted or deleted it
+  return value
+
+
+---------------------- instance level -------------------
+
+::method compareTo   -- allow sorting, by default by NR which represents the creation sequence
+  use arg other
+  return sign(nz(self["NUMBER"],-1) - nz(other["NUMBER"],-1))  -- cf. rexxref.pdf, ComparableClass' compareTo definition
+
+nz: procedure  -- in case a Rexx user removed the NR entry, make sure the subtraction can take place
+  use arg val,ifNilValue=0
+  if val~isNil then return ifNilValue
+  return val
+
+::method makeString  -- returns the traceline string
+  return self~class~makeStringImpl(self)  -- let the class method makeStringImpl do the work
+

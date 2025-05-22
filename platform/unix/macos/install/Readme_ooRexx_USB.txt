@@ -1,6 +1,6 @@
 			Readme_ooRexx5_USB.txt
 
-Copyright 2005-2022 Rexx Language Association.  All rights reserved.
+Copyright 2005-2025 Rexx Language Association.  All rights reserved.
 
 ===================================================================
 
@@ -22,7 +22,8 @@ How To install ooRexx 5 on a USB Stick for use with macOS
 
 1. Copy the latest ooRexx5 image (.dmg file) from Sourceforge to the desktop
    or to a folder. The image name will show version and revision such as
-   ooRexx-5.0.0-12317.macOS.arm64.x86_64.
+   oorexx-5.1.0-12966.macos.arm64.x86_64. This installer will work on both
+   Intel (x86_64) and Apple Silicon M1/M2/M3/M4 etc (arm64) hardware.
 
 2. Mount the image by double clicking on it.
 

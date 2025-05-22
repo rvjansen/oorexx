@@ -3997,6 +3997,29 @@ size_t RexxEntry WSClipboard(const char *funcname, size_t argc, CONSTRXSTRING ar
         }
         RETC(!ret)
     }
+    else if (!strcmp(argv[0].strptr, "COPY UNICODE"))
+    {
+        // put Unicode text (UTF-16) in the clipboard
+        HGLOBAL hmem;
+        char * membase;
+
+        CHECKARG(2,2);
+        hmem = (char *)GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, argv[1].strlength + 2); // +2 to support the final \0\0
+        membase = (char *) GlobalLock(hmem);
+
+        if (membase)
+        {
+            memcpy(membase, argv[1].strptr, argv[1].strlength + 1); // including the \0 managed by oorexx
+            membase[argv[1].strlength + 1] = '\0'; // 2nd \0 to have a final \0\0 (yes, you need it!)
+            if (OpenClipboard(NULL) && EmptyClipboard())
+            {
+                ret = SetClipboardData(CF_UNICODETEXT, hmem) != NULL;
+            }
+            GlobalUnlock(membase);
+            CloseClipboard();
+        }
+        RETC(!ret)
+    }
     else if (!strcmp(argv[0].strptr, "PASTE"))
     {
         HGLOBAL hmem;
@@ -4013,13 +4036,20 @@ size_t RexxEntry WSClipboard(const char *funcname, size_t argc, CONSTRXSTRING ar
                     retstr->strptr = (char *)GlobalAlloc(GMEM_FIXED, s);
                     if (retstr->strptr == NULL)
                     {
+                        GlobalUnlock(membase);
                         CloseClipboard();
                         return -1;
                     }
                 }
+#if 0
+                // legacy behavior: forbids to get the clipboard contents as a binay string (truncated at first \0)
                 s = strlen(membase);
                 memcpy(retstr->strptr, membase, s+1);
                 retstr->strlength = s;
+#else
+                memcpy(retstr->strptr, membase, s); // including the final \0
+                retstr->strlength = s-1; // don't count the final \0
+#endif
                 GlobalUnlock(membase);
                 CloseClipboard();
                 return 0;
@@ -4027,6 +4057,111 @@ size_t RexxEntry WSClipboard(const char *funcname, size_t argc, CONSTRXSTRING ar
             else
             {
                 CloseClipboard();
+            }
+        }
+        retstr->strlength = 0;
+        return 0;
+    }
+    else if (!strcmp(argv[0].strptr, "PASTE UNICODE"))
+    {
+        // returns Unicode text (UTF-16)
+        HGLOBAL hmem;
+        char * membase;
+        if (IsClipboardFormatAvailable(CF_UNICODETEXT) && OpenClipboard(NULL))
+        {
+            hmem = GetClipboardData(CF_UNICODETEXT);
+            membase = (char *) GlobalLock(hmem);
+            if (membase == NULL) CloseClipboard();
+            else
+            {
+                size_t s = GlobalSize(hmem);
+                if (s>255)
+                {
+                    retstr->strptr = (char *)GlobalAlloc(GMEM_FIXED, s);
+                    if (retstr->strptr == NULL)
+                    {
+                        GlobalUnlock(membase);
+                        CloseClipboard();
+                        return -1;
+                    }
+                }
+                memcpy(retstr->strptr, membase, s); // including the final \0\0
+                retstr->strlength = s-2; // don't count the final \0\0
+                GlobalUnlock(membase);
+                CloseClipboard();
+                return 0;
+            }
+        }
+        retstr->strlength = 0;
+        return 0;
+    }
+    else if (!strcmp(argv[0].strptr, "LOCALE"))
+    {
+        /*
+        returns the locale name as Unicode text (UTF-16)
+
+        https://learn.microsoft.com/en-us/windows/win32/dataxchg/standard-clipboard-formats
+        locale identifier (LCID) associated with text in the clipboard.
+        An application that pastes text from the clipboard can retrieve this
+        format to determine which character set was used to generate the text.
+        The system uses the code page associated with CF_LOCALE to implicitly
+        convert from CF_TEXT to CF_UNICODETEXT.
+
+        https://learn.microsoft.com/en-us/windows/win32/intl/locale-identifiers
+        32-bit value
+        +-------------+---------+-------------------------+
+        |   Reserved  | Sort ID |      Language ID        |
+        +-------------+---------+-------------------------+
+        31         20 19     16 15                      0   bit
+
+        https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/
+        Windows Language Code Identifier (LCID) Reference
+
+        Example:
+        09040000 --> "en-US"
+            LangID = 0x409    en-US
+            SortID = 0
+            Reserved = 0
+        */
+
+        HGLOBAL hmem;
+        char * membase;
+        if (IsClipboardFormatAvailable(CF_LOCALE) && OpenClipboard(NULL))
+        {
+            hmem = GetClipboardData(CF_LOCALE); // 4 bytes
+            membase = (char *) GlobalLock(hmem);
+            if (membase == NULL) CloseClipboard();
+            else
+            {
+                LCID localeId;
+                size_t s = GlobalSize(hmem);
+                if (s != sizeof(localeId)) // should not happen
+                {
+                    GlobalUnlock(membase);
+                    CloseClipboard();
+                }
+                else
+                {
+                    memcpy(&localeId, membase, s);
+                    GlobalUnlock(membase);
+                    CloseClipboard();
+
+                    // required size, in characters (including the final \0\0), for the locale name buffer.
+                    int wcharCount = LCIDToLocaleName(localeId, NULL, 0, 0);
+                    s = wcharCount * sizeof(WCHAR);
+                    if (s != 0)
+                    {
+                        if (s>255)
+                        {
+                            retstr->strptr = (char *)GlobalAlloc(GMEM_FIXED, s);
+                            if (retstr->strptr == NULL) return -1;
+                        }
+                        wcharCount = LCIDToLocaleName(localeId, (LPWSTR)retstr->strptr, wcharCount, 0);
+                        s = wcharCount * sizeof(WCHAR);
+                        retstr->strlength = s-2; // don't count the final \0\0
+                        return 0;
+                    }
+                }
             }
         }
         retstr->strlength = 0;

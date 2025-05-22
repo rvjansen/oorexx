@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -42,6 +42,10 @@
 /*                                                                            */
 /******************************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include "RexxCore.h"
 #include "ActivityManager.hpp"
 #include <errno.h>
@@ -79,7 +83,7 @@ void SysActivity::close()
 void SysActivity::create(Activity *activity, size_t stackSize)
 {
     // try to create the thread and raise an exception for any failure
-    int rc = SysThread::createThread(threadId, stackSize, threadFnc, (void *)activity);
+    int rc = SysThread::createThread(threadId, valid, stackSize, threadFnc, (void *)activity);
     if (rc != 0)
     {
         reportException(Error_System_service_service, "ERROR CREATING THREAD");
@@ -126,12 +130,94 @@ void SysActivity::useCurrentThread()
  * Return the pointer to the base of the current stack.
  * This is used for checking recursion overflows.
  *
- * @param base      A local variable at the base of the stack.
- * @param stackSize
- *
  * @return The character pointer for the stack base.
  */
-char *SysActivity::getStackBase(int32_t *base, size_t stackSize)
+char* SysActivity::getStackBase()
 {
-    return (char *)base - stackSize;
+// The interpreter assumes a downwards-growing stack, which is true for most
+// modern ABIs resp. CPU architectures.  Fixes will be needed for a CPU with
+// an upwards-growing stack.  Also, we have to cope with all those different
+// non-portable implementations.
+#ifdef HAVE_PTHREAD_GETATTR_NP
+    // Linux
+    pthread_attr_t attrs;
+    pthread_getattr_np(pthread_self(), &attrs);
+    void   *stackAddr;
+    size_t  stackSize;
+    pthread_attr_getstack(&attrs, &stackAddr, &stackSize);
+    pthread_attr_destroy(&attrs);
+#ifdef OPSYS_AIX
+    // although POSIX requires pthread_attr_getstack() to return stackaddr
+    // pointing to the lowest addressable byte of the stack, on AIX 7.2 it
+    // instead points to the highest addressable byte of the stack.  Fix this.
+    return (char *)stackAddr - stackSize;
+#endif
+    return (char *)stackAddr;
+#elif defined HAVE_PTHREAD_ATTR_GET_NP
+    // FreeBSD, OpenIndiana
+    pthread_attr_t attrs;
+    pthread_attr_init(&attrs);
+    pthread_attr_get_np(pthread_self(), &attrs);
+    void   *stackAddr;
+    size_t  stackSize;
+    pthread_attr_getstack(&attrs, &stackAddr, &stackSize);
+    pthread_attr_destroy(&attrs);
+    return (char *)stackAddr;
+#elif defined HAVE_PTHREAD_STACKSEG_NP
+    // OpenBSD
+    stack_t stack;
+    pthread_stackseg_np(pthread_self(), &stack);
+    // as documented on https://man.openbsd.org/pthread_stackseg_np.3
+    // the ss_sp variable points to the top of the stack instead of the base
+    return (char *)stack.ss_sp - stack.ss_size;
+#elif defined HAVE_PTHREAD_GET_STACKSIZE_NP
+    // MacOS
+    pthread_t thread = pthread_self();
+    size_t size = pthread_get_stacksize_np(thread);
+    // stack address points to the start of the stack (the high address),
+    // not the base, how it's returned by pthread_get_stackaddr_np
+    return (char *)pthread_get_stackaddr_np(thread) - size;
+#else
+#error no code for getStackBase()
+#endif
+}
+
+
+/**
+ * Return the size of the stack used by the current thread.
+ *
+ * @return The size of the current stack
+ */
+size_t SysActivity::getStackSize()
+{
+#ifdef HAVE_PTHREAD_GETATTR_NP
+    // Linux
+    pthread_attr_t attrs;
+    pthread_getattr_np(pthread_self(), &attrs);
+    void   *stackAddr;
+    size_t  stackSize;
+    pthread_attr_getstack(&attrs, &stackAddr, &stackSize);
+    pthread_attr_destroy(&attrs);
+    return stackSize;
+#elif defined HAVE_PTHREAD_ATTR_GET_NP
+    // FreeBSD, OpenIndiana
+    pthread_attr_t attrs;
+    pthread_attr_init(&attrs);
+    pthread_attr_get_np(pthread_self(), &attrs);
+    void   *stackAddr;
+    size_t  stackSize;
+    pthread_attr_getstack(&attrs, &stackAddr, &stackSize);
+    pthread_attr_destroy(&attrs);
+    return stackSize;
+#elif defined HAVE_PTHREAD_STACKSEG_NP
+    // OpenBSD
+    stack_t stack;
+    pthread_stackseg_np(pthread_self(), &stack);
+    return stack.ss_size;
+#elif defined HAVE_PTHREAD_GET_STACKSIZE_NP
+    // MacOS
+    return pthread_get_stacksize_np(pthread_self());
+#else
+#error no code for getStackSize()
+#endif
 }

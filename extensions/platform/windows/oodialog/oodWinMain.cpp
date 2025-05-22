@@ -1,6 +1,6 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/* Copyright (c) 2013-2018 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2013-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -92,6 +92,12 @@ static void setDlgIcon(HWND hDlg, HINSTANCE hInstance)
      if( hIcon )
      {
          SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+     }
+     hIcon = LoadImage(hInstance, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+                       GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0);
+     if( hIcon )
+     {
+         SendMessage(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
      }
 }
 

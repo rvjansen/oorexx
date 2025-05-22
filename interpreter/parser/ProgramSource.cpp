@@ -439,7 +439,7 @@ void BufferProgramSource::buildDescriptors()
     }
 
     // ok, get the embedded buffer and keep that portion
-    OrefSet(this, this->descriptorArea, indices->getBuffer());
+    setField(descriptorArea, indices->getBuffer());
 
     // now we need to see if we've got a shebang line.  If we find
     // this, tell the language parser to start parsing on the second line.

@@ -686,7 +686,7 @@ RexxObject *MutableBuffer::setBufferSize(RexxInteger *size)
         if (bufferLength > defaultSize)
         {
             // reallocate the buffer
-            OrefSet(this, data, new_buffer(defaultSize));
+            setField(data, new_buffer(defaultSize));
             // reset the size to the default
             bufferLength = defaultSize;
         }

@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -58,6 +58,7 @@
 #include "MessageClass.hpp"
 #include "RexxCode.hpp"
 #include "RexxInstruction.hpp"
+#include "TraceInstruction.hpp"
 #include "CallInstruction.hpp"
 #include "DoBlock.hpp"
 #include "DoInstruction.hpp"
@@ -82,6 +83,19 @@
 #include "CommandIOConfiguration.hpp"
 #include "CommandIOContext.hpp"
 #include "LibraryPackage.hpp"
+
+#include <atomic>
+
+#include <stdexcept> // std::exception_ptr, std::current_exception, std::rethrow_exception
+
+
+static std::atomic<uint32_t> counter(0); // to generate idntfr for concurrency trace
+
+uint32_t RexxActivation::getIdntfr()
+{
+    if (idntfr == 0) idntfr = ++counter;
+    return idntfr;
+}
 
 /**
  * Create a new activation object
@@ -203,8 +217,11 @@ RexxActivation::RexxActivation(Activity *_activity, RexxActivation *_parent, Rex
 
     // inherit parents settings
     _parent->putSettings(settings);
-    // step the trace indentation level for this internal nesting
-    settings.traceIndent++;
+    // except for INTERPRET, step the trace indentation level for this internal nesting
+    if (!isInterpret())
+    {
+        settings.traceIndent++;
+    }
 
     // if we are doing an internal call, we've inherited our
     // caller's trap state, but if we change anything, then we need
@@ -331,7 +348,7 @@ void RexxActivation::live(size_t liveMark)
     memory_mark(conditionQueue);
     memory_mark(contextObject);
 
-    // We're hold a pointer back to our arguments directly where they
+    // We're holding a pointer back to our arguments directly where they
     // are created.  Since in some places, this argument list comes
     // from the C stack, we need to handle the marking ourselves.
     memory_mark_array(argCount, argList);
@@ -366,7 +383,7 @@ void RexxActivation::liveGeneral(MarkReason reason)
     memory_mark_general(conditionQueue);
     memory_mark_general(contextObject);
 
-    // We're hold a pointer back to our arguments directly where they
+    // We're holding a pointer back to our arguments directly where they
     // are created.  Since in some places, this argument list comes
     // from the C stack, we need to handle the marking ourselves.
     memory_mark_general_array(argCount, argList);
@@ -418,7 +435,7 @@ void RexxActivation::inheritPackageSettings()
 RexxObject * RexxActivation::dispatch()
 {
     ProtectedObject r;
-    // we just resume running at the old location, reusing the intial values.
+    // we just resume running at the old location, reusing the initial values.
     return run(receiver, settings.messageName, argList, argCount, OREF_NULL, r);
 }
 
@@ -451,6 +468,10 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
     // initial setup
     if (executionState != REPLIED)
     {
+        // the trace entry is allowed if we are at the first instruction
+        traceEntryAllowed = (start == OREF_NULL);
+        traceEntryDone = false;
+
         // exits possible?  We don't use exits for methods in the image
         // we try not to check stuff between clauses unless we have to...the
         // clause boundary flag tells us we need to perform checks.
@@ -471,7 +492,7 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
             // save entry argument list forvariable pool fetch private access
             settings.parentArgList = argList;
             settings.parentArgCount = argCount;
-            // make sure the code has resolved any class definitions, requireds, or libraries
+            // make sure the code has resolved any class definitions, requires, or libraries
             code->install(this);
             // set our starting code position (and the instruction used for error reporting)
             next = code->getFirstInstruction();
@@ -491,6 +512,10 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
                 {
                     // get the object variables and reserve these
                     settings.objectVariables = receiver->getObjectVariables(scope);
+
+                    // For proper diagnostic in case of deadlock, do the trace now
+                    traceEntry();
+
                     settings.objectVariables->reserve(activity);
                     objectScope = SCOPE_RESERVED;
                 }
@@ -520,8 +545,13 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
     // resuming on a new thread after a reply
     else
     {
+        // the trace entry after the reply will be done only if the trace entry
+        // has been done before the reply
+        traceEntryAllowed = traceEntryDone;
+        traceEntryDone = false;
+
         // if we could not keep the guard lock when we were spun off, then
-        // we need to reaquire (and potentially wait) for the lock now.
+        // we need to reacquire (and potentially wait) for the lock now.
         if (settings.hasTransferFailed())
         {
             settings.objectVariables->reserve(activity);
@@ -555,20 +585,14 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
     // is a routine or method invocation in one of those packages, give the
     // initial entry trace so the user knows where we are.
     // Must be one of ::OPTIONS TRACE ALL/RESULTS/INTERMEDIATES/LABELS
-    if (tracingLabels() && isMethodOrRoutine())
-    {
-        traceEntry();
-        if (!tracingAll())
-        {
-            // we pause on the label only for ::OPTIONS TRACE LABELS
-            pauseLabel();
-        }
-    }
+    traceEntry();
 
     // this is the main execution loop...continue until we get a terminating
     // condition, such as a RETURN or EXIT, or just reaching the end of the code stream.
+    std::exception_ptr ex; // manage delayed exception (see explanation below)
     while (true)
     {
+        ex = NULL; // we have no delayed exception yet
         try
         {
             RexxInstruction *nextInst = next;
@@ -595,13 +619,19 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
                 // the time stamp is no longer current
                 settings.timeStamp.valid = false;
 
-                // do we need to check clause_boundary stuff?  Go do those
+                // do we need to check clauseBoundary stuff?  Go do those
                 // checks.
                 if (clauseBoundary)
                 {
                     processClauseBoundary();
                 }
-                // get our next instrucion and loop around
+
+                // retro-trace of entry in a routine/method is allowed only if
+                // - the TRACE instruction is the first instruction (or the second if the first instruction is an expose).
+                // - the TRACE function is called from the first instruction (or the second if the first instruction is EXPOSE).
+                if (current->getType() != KEYWORD_EXPOSE) traceEntryAllowed = false;
+
+                // get our next instruction and loop around
                 nextInst = next;
             }
 
@@ -652,6 +682,17 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
             {
                 // save the reply result for handing back to the caller.
                 resultObj = result;
+
+                // indicate exit of the activity for the current invocation
+                if (traceEntryDone && tracingLabels() && isMethodOrRoutine())
+                {
+                    traceEntryOrExit(TRACE_PREFIX_INVOCATION_EXIT);
+                    if (!tracingAll())
+                    {
+                        // we pause on the label only for ::OPTIONS TRACE LABELS
+                        pauseLabel();
+                    }
+                }
                 // reset the next instruction
                 next = current->nextInstruction;
 
@@ -660,6 +701,9 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
                 Activity *oldActivity = activity;
 
                 activity = oldActivity->spawnReply();
+
+                // save current frame info in a StringTable as it has caused the creation of a new activity
+                Activity::setCallerStackFrameAsStringTable(oldActivity, activity, false);
 
                 // save the pointer to the start of our stack frame.  We're
                 // going to need to release this after we migrate everything
@@ -709,53 +753,69 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
         }
         // an error has occurred.  The thrown object is an activation pointer,
         // which tells us when to stop unwinding
-        catch (RexxActivation *t)
+        catch (const RexxActivation *t)
         {
             // if we're not the target of this throw, we've already been unwound
             // keep throwing this until it reaches the target activation.
             if (t != this)
             {
-                throw;
+                // due to Windows 64-bit issue https://sourceforge.net/p/oorexx/bugs/1914/
+                // reported to Microsoft and closed as "Not a Bug" in
+                // https://developercommunity.visualstudio.com/t/msconnect-3136060-c-extreme-stack-growth-and-stack/206155
+                // we need to use this workaround instead of a simple "throw"
+                ex = std::current_exception(); // do a "delayed throw"
             }
-
-            // if we're not the current kernel holder when things return, make sure we
-            // get the lock before we continue
-            if (ActivityManager::currentActivity != activity)
+            else
             {
-                activity->requestAccess();
-            }
-
-            // unwind the activation stack back to our frame
-            activity->unwindToFrame(this);
-
-            // do the normal between clause clean up.
-            stack.clear();
-            settings.timeStamp.valid = false;
-
-            // if we were in a debug pause, we had a error interpreting the
-            // line typed at the pause.  We're just going to terminate this
-            // like it was a return
-            if (debugPause)
-            {
-                stopExecution(RETURNED);
-            }
-
-            // we might have caught a condition.  See if we have something to do.
-            if (conditionQueue != OREF_NULL)
-            {
-                // if we have pending traps, process them now
-                if (!conditionQueue->isEmpty())
+                // if we're not the current kernel holder when things return, make sure we
+                // get the lock before we continue
+                if (ActivityManager::currentActivity != activity)
                 {
-                    processTraps();
-                    // processing the traps might have deferred handling until clause
-                    // termination (CALL ON conditions)...turn on the clause_boundary
-                    // flag to check for them after instruction completiong.
+                    activity->requestAccess();
+                }
+
+                // unwind the activation stack back to our frame
+                activity->unwindToFrame(this);
+
+                // do the normal between clause clean up.
+                stack.clear();
+                settings.timeStamp.valid = false;
+
+                // if we were in a debug pause, we had a error interpreting the
+                // line typed at the pause.  We're just going to terminate this
+                // like it was a return
+                if (debugPause)
+                {
+                    stopExecution(RETURNED);
+                }
+
+                // we might have caught a condition.  See if we have something to do.
+                if (conditionQueue != OREF_NULL)
+                {
+                    // if we have pending traps, process them now
                     if (!conditionQueue->isEmpty())
                     {
-                        clauseBoundary = true;
+                        bool caught = processTraps();
+                        // a condition might have raised an error because of a missing label
+                        // go process it now
+                        if (caught && !conditionQueue->isEmpty())
+                        {
+                            processTraps();
+                        }
+                        // processing the traps might have deferred handling until clause
+                        // termination (CALL ON conditions)...turn on the clauseBoundary
+                        // flag to check for them after instruction completion.
+                        if (!conditionQueue->isEmpty())
+                        {
+                            clauseBoundary = true;
+                        }
                     }
                 }
             }
+        }
+        if (ex) // if we've had a delayed throw, execute it now
+        {
+            std::rethrow_exception(ex);
         }
     }
 }
@@ -764,11 +824,15 @@ RexxObject* RexxActivation::run(RexxObject *_receiver, RexxString *name, RexxObj
 /**
  * process pending condition traps before going on to execute a
  * clause
+ *
+ * @return true if a trap handler may have raised another condition.
  */
-void RexxActivation::processTraps()
+bool RexxActivation::processTraps()
 {
+    bool caught = false;
     size_t i = conditionQueue->items();
 
+    std::exception_ptr ex; // manage delayed exception (see explanation below)
     // process each item currently in the queue
     while (i--)
     {
@@ -793,6 +857,7 @@ void RexxActivation::processTraps()
 
             // it's possible that the condition can raise an error because of a
             // missing label, so we need to catch any conditions that might be thrown
+            ex = NULL; // we have no delayed exception yet
             try
             {
                 // process the trap
@@ -800,22 +865,34 @@ void RexxActivation::processTraps()
             }
             catch (RexxActivation *t)
             {
+                caught = true;
                 // if we're not the target of this throw, we've already been unwound
                 // keep throwing this until it reaches the target activation.
                 if (t != this)
                 {
-                    throw;
+                    // due to Windows 64-bit issue https://sourceforge.net/p/oorexx/bugs/1914/
+                    // reported to Microsoft and closed as "Not a Bug" in
+                    // https://developercommunity.visualstudio.com/t/msconnect-3136060-c-extreme-stack-growth-and-stack/206155
+                    // we need to use this workaround instead of a simple "throw"
+                    ex = std::current_exception(); // delay the throw to after the catch block
                 }
-
-                // if we're not the current kernel holder when things return, make sure we
-                // get the lock before we continue
-                if (ActivityManager::currentActivity != activity)
+                else
                 {
-                    activity->requestAccess();
+                    // if we're not the current kernel holder when things return, make sure we
+                    // get the lock before we continue
+                    if (ActivityManager::currentActivity != activity)
+                    {
+                        activity->requestAccess();
+                    }
                 }
+            }
+            if (ex) // if we've had a delayed throw, execute it now
+            {
+                std::rethrow_exception(ex);
             }
         }
     }
+    return caught;
 }
 
 
@@ -887,39 +964,44 @@ void RexxActivation::setTrace(const TraceSetting &source)
     settings.setTraceSuppressed(false);
     settings.traceSkip = 0;
 
+    bool debug = settings.packageSettings.traceSettings.isDebug();
+
+    // if this is a nop request like "trace ??" our settings remain unchanged.
+    if (source.isNoSetting())
+    {
+        ; // no change
+    }
+    // if this is a trace off request we unconditionally set trace off
+    // no debug is allowed for trace off
+    else if (source.isTraceOff())
+    {
+        settings.packageSettings.traceSettings.setTraceOff();
+    }
     // this might just be a debug toggle request.  All other trace
     // settings remain the same, but we flip the debug state to the
     // other mode.
-    if (source.isDebugToggle())
+    else if (source.isDebugToggle())
     {
-        // just flip the debug state
-        settings.packageSettings.traceSettings.toggleDebug();
-        // if no longer in debug mode, we need to reset the prompt issued flag
-        if (!settings.packageSettings.traceSettings.isDebug())
+        // except for trace off, we flip the debug state
+        // no debug is allowed for trace off
+        if (!settings.packageSettings.traceSettings.isTraceOff())
         {
-            // flipping out of debug mode.  Reissue the debug prompt when
-            // turned back on again
-            settings.setDebugPromptIssued(false);
-        }
-    }
-    // are we in debug mode already?  A trace setting with no "?" maintains the
-    // debug setting, unless it is Trace Off
-    else if (settings.packageSettings.traceSettings.isDebug())
-    {
-        // merge the flag settings
-        settings.packageSettings.traceSettings.merge(source);
-        // flipped out of debug mode.  Reissue the debug prompt when
-        // turned back on again
-        if (!settings.packageSettings.traceSettings.isDebug())
-        {
-            settings.setDebugPromptIssued(false);
+            settings.packageSettings.traceSettings.toggleDebug();
         }
     }
     else
     {
         // set the new flags
         settings.packageSettings.traceSettings.set(source);
+        // if applicable then trace the entry in the current routine/method
+        traceEntry();
+    }
 
+    if (debug && !settings.packageSettings.traceSettings.isDebug())
+    {
+        // flipping out of debug mode.  Reissue the debug prompt when
+        // turned back on again
+        settings.setDebugPromptIssued(false);
     }
 
     // if tracing intermediates, turn on the special fast check flag
@@ -966,7 +1048,7 @@ void RexxActivation::returnFrom(RexxObject *resultObj)
     {
         reportException(Error_Execution_reply_return);
     }
-    // cause this level to terminate terminate the execution loop and shut down
+    // cause this level to terminate the execution loop and shut down
     stopExecution(RETURNED);
     // if this is an interpret, we really need to terminate the parent activation
     if (isInterpret())
@@ -1221,8 +1303,8 @@ void RexxActivation::autoExpose(RexxVariableBase **variables, size_t count)
 RexxObject* RexxActivation::forward(RexxObject  *target, RexxString  *message,
                                     RexxClass *superClass, RexxObject **arguments, size_t argcount, bool continuing)
 {
-    // all pieces that are a note specified on the FORWARD will use the
-    // contgext values.
+    // all pieces that are not specified on the FORWARD will use the
+    // context values.
     if (target == OREF_NULL)
     {
         target = receiver;
@@ -1311,8 +1393,6 @@ void RexxActivation::exitFrom(RexxObject *resultObj)
         {
             activity->callTerminationExit(this);
         }
-        // terminate this level
-        termination();
     }
     else
     {
@@ -1363,8 +1443,26 @@ void RexxActivation::implicitExit()
  */
 void RexxActivation::termination()
 {
-    // remove any guard locks for this activaty.
+    // remove any guard locks for this activity.
     guardOff();
+
+    if (traceEntryDone && tracingLabels() && isMethodOrRoutine())
+    {
+        if (settings.isForwarded())         // do not trace just as yet
+        {
+            settings.setForwarded(false);   // clear setting to allow trace on next termination() of this activation
+        }
+        else    // o.k. to trace
+        {
+            traceEntryOrExit(TRACE_PREFIX_INVOCATION_EXIT);
+            if (!tracingAll())
+            {
+                // we pause on the label only for ::OPTIONS TRACE LABELS
+                pauseLabel();
+            }
+        }
+    }
+
     // have any setlocals we need to undo?
     if (environmentList != OREF_NULL && !environmentList->isEmpty())
     {
@@ -1637,7 +1735,7 @@ void RexxActivation::raiseExit(RexxString *condition, RexxObject *rc, RexxString
             activity->callTerminationExit(this);
         }
         ProtectedObject p(this);
-        // terminate the activaiton and remove from the stack
+        // terminate the activation and remove from the stack
         termination();
         activity->popStackFrame(false);
         // propagate to the parent
@@ -1665,7 +1763,7 @@ void RexxActivation::raise(RexxString *condition, RexxObject *rc, RexxString *de
 
     Protected<DirectoryClass> p = conditionobj;
 
-    // are we propagating an an existing condition?
+    // are we propagating an existing condition?
     if (condition->strCompare(GlobalNames::PROPAGATE))
     {
         // get the original condition name
@@ -1948,7 +2046,7 @@ StringTable* RexxActivation::getStreams()
             else
             {
 
-                // alway's use caller's for internal call, external call or interpret
+                // always use caller's for internal call, external call or interpret
                 settings.streams = ((RexxActivation *)callerFrame)->getStreams();
             }
         }
@@ -2414,7 +2512,7 @@ bool RexxActivation::trap(RexxString *condition, DirectoryClass *exceptionObject
                 throw this;
             }
             // if we're interpreted, this needs to be handled in the parent
-            // activaiton.
+            // activation.
             else
             {
                 parent->mergeTraps(conditionQueue);
@@ -2584,7 +2682,7 @@ void RexxActivation::mergeTraps(QueueClass *sourceConditionQueue)
  * or PROPAGATE condition trap.  This ensures that the SIGNAL
  * or PROPAGATE returns to the correct condition level
  *
- * @param child  The child activaty.
+ * @param child  The child activity.
  */
 void RexxActivation::unwindTrap(RexxActivation *child)
 {
@@ -2649,6 +2747,7 @@ void RexxActivation::interpret(RexxString *codestring)
     ProtectedObject r;
     // run this compiled code on the new activation
     newActivation->run(OREF_NULL, OREF_NULL, argList, argCount, OREF_NULL, r);
+
 }
 
 
@@ -2661,6 +2760,7 @@ void RexxActivation::debugInterpret(RexxString *codestring)
 {
     // mark that this is debug mode
     debugPause = true;
+    std::exception_ptr ex; // manage delayed exception (see explanation below)
     try
     {
         // translate the code
@@ -2681,21 +2781,31 @@ void RexxActivation::debugInterpret(RexxString *codestring)
         // keep throwing this until it reaches the target activation.
         if (t != this)
         {
-            throw;
+            // due to Windows 64-bit issue https://sourceforge.net/p/oorexx/bugs/1914/
+            // reported to Microsoft and closed as "Not a Bug" in
+            // https://developercommunity.visualstudio.com/t/msconnect-3136060-c-extreme-stack-growth-and-stack/206155
+            // we need to use this workaround instead of a simple "throw"
+            ex = std::current_exception(); // delay the throw to after the catch block
         }
-
-        // if we're not the current kernel holder when things return, make sure we
-        // get the lock before we continue
-        if (ActivityManager::currentActivity != activity)
+        else
         {
-            activity->requestAccess();
+            // if we're not the current kernel holder when things return, make sure we
+            // get the lock before we continue
+            if (ActivityManager::currentActivity != activity)
+            {
+                activity->requestAccess();
+            }
         }
+    }
+    if (ex) // if we've had a delayed throw, execute it now
+    {
+        std::rethrow_exception(ex);
     }
 }
 
 
 /**
- * Return a Rexx-defined "dot" variable na.e
+ * Return a Rexx-defined "dot" variable name
  *
  * @param name   The target variable name.
  *
@@ -2766,7 +2876,7 @@ RexxObject * RexxActivation::rexxVariable(RexxString * name )
 RexxObject *RexxActivation::getContextObject()
 {
     // the context object is created on demand...much of the time, this
-    // is not needed for an actvation
+    // is not needed for an activation
     if (contextObject == OREF_NULL)
     {
         contextObject = new RexxContext(this);
@@ -2805,13 +2915,16 @@ size_t RexxActivation::getContextLineNumber()
 {
     // if this is an interpret, we need to report the line number of
     // the context that calls the interpret.
+    // it may be the case that no current instruction is available if triggered via native code
+    // in that case current (parent?) may be NULL (cf. TRACE.testgroup),
+    // if so return 1 as the context line number
     if (isInterpret())
     {
-        return parent->getContextLineNumber();
+        return (parent ? parent->getContextLineNumber() : 1);
     }
     else
     {
-        return current->getLineNumber();
+        return (current ? current->getLineNumber() : 1);
     }
 }
 
@@ -3210,7 +3323,7 @@ RexxObject * RexxActivation::internalCallTrap(RexxString *name, RexxInstruction 
 void RexxActivation::guardWait()
 {
     // we need to wait without locking the variables.  If we
-    // held the lock before the wait, we reaquire it after we wake up.
+    // held the lock before the wait, we reacquire it after we wake up.
     GuardStatus initial_state = objectScope;
 
     if (objectScope == SCOPE_RESERVED)
@@ -3255,7 +3368,7 @@ RexxDateTime RexxActivation::getTime()
         // IMPORTANT:  If a time call resets the elapsed time clock, we don't
         // clear the value out.  The time needs to stay valid until the clause is
         // complete.  The time stamp value that needs to be used for the next
-        // elapsed time call is the timstamp that was valid at the point of the
+        // elapsed time call is the timestamp that was valid at the point of the
         // last call, which is our current old invalid one.  So, we need to grab
         // that value and set the elapsed time start point, then clear the flag
         // so that it will remain current.
@@ -3367,7 +3480,7 @@ RexxInteger * RexxActivation::random(RexxInteger *randmin, RexxInteger *randmax,
     if (randmin != OREF_NULL)
     {
         // no maximum value specified and no seed specified,
-        // then the minimum is actually the max value value
+        // then the minimum is actually the max value
         if ((randmax == OREF_NULL) && (randseed == OREF_NULL))
         {
             maximum = randmin->getValue();
@@ -3444,6 +3557,7 @@ static const char * trace_prefix_table[] =
   ">N>",                               // TRACE_PREFIX_NAMESPACE
   ">K>",                               // TRACE_PREFIX_KEYWORD
   ">R>",                               // TRACE_PREFIX_ALIAS
+  "<I<",                               // TRACE_PREFIX_INVOCATION_EXIT
 };
 
 // size of a line number
@@ -3483,40 +3597,98 @@ const char *RexxActivation::ASSIGNMENT_MARKER = " <= ";
  */
 void RexxActivation::traceEntry()
 {
+    if (!traceEntryAllowed) return;
+    if (traceEntryDone) return;
+
+    bool earlyTraceEntry = false;
+    {
+        // Code analysis (allow to trace the entry before a possible lock)
+        // If the first instruction other than expose is a non-dynamic TRACE A or TRACE I or TRACE L or TRACE R then activate the entry trace.
+        // We are on the first instruction because traceEntryAllowed is true.
+        RexxInstruction *instruction = current;
+        if (instruction != OREF_NULL && instruction->getType() == KEYWORD_EXPOSE) instruction = instruction->nextInstruction;
+        if (instruction != OREF_NULL && instruction->getType() == KEYWORD_TRACE)
+        {
+            RexxInstructionTrace *instructionTrace = (RexxInstructionTrace *)instruction;
+            earlyTraceEntry = instructionTrace->nonDynamicTracingLabels() && isMethodOrRoutine();
+        }
+    }
+
+    bool traceEntry = false;
+    if (isInterpret())
+    {
+        traceEntry = tracingLabels() && parent->isMethodOrRoutine();
+        // Next line: don't test parent->tracingLabels() because it's not yet updated with the latest value.
+        // See RexxActivation::setTrace, there is a call of traceEntry after having updated the trace settings.
+        // Here, we are in interpret, these trace settings will be pushed back to the parent ONLY after returning from the interpret activation.
+        traceEntry = traceEntry && parent->traceEntryAllowed && !parent->traceEntryDone /* && parent->tracingLabels() */;
+    }
+    else
+    {
+        traceEntry = tracingLabels() && isMethodOrRoutine();
+    }
+
+    if (earlyTraceEntry || traceEntry)
+    {
+        // Should we use this->settings.traceEntryDone instead of this->traceEntryDone?
+        // and let RexxActivation::run push back to the parent using parent->getSettings(settings)
+        // when executionState == RETURNED?
+        traceEntryDone = true; // set it now, to avoid any recursion
+        if (isInterpret()) parent->traceEntryDone = true; // push back to the parent now, because nobody will do it for us
+        traceEntryOrExit(TRACE_PREFIX_INVOCATION);
+        if (!tracingAll())
+        {
+            // we pause on the label only for [::OPTIONS] TRACE LABELS
+            pauseLabel();
+        }
+    }
+}
+
+
+/**
+ * Trace program entry or exit for a method or routine
+ */
+void RexxActivation::traceEntryOrExit(TracePrefix tp)
+{
     // since we're advertising the entry location up front, we want to disable
     // the normal trace-turn on notice.  We'll get one or the other, but not
     // both
     settings.setSourceTraced(true);
 
+    RexxActivation *context = this;
+    if (isInterpret()) context = parent;
+
     ArrayClass *info = OREF_NULL;
 
     // the substitution information is different depending on whether this
     // is a method or a routine.
-    if (isMethod())
+    if (context->isMethod())
     {
-        info = new_array(getMessageName(), ((MethodClass *)executable)->getScopeName(), getPackage()->getProgramName());
+        info = new_array(context->getMessageName(), ((MethodClass *)context->executable)->getScopeName(), context->getPackage()->getProgramName());
     }
     else
     {
-        info = new_array(getExecutable()->getName(), getPackage()->getProgramName());
+        info = new_array(context->getExecutable()->getName(), context->getPackage()->getProgramName());
     }
     ProtectedObject p(info);
 
     // and the message is slightly different
-    RexxString *message = activity->buildMessage(isRoutine() ? Message_Translations_routine_invocation : Message_Translations_method_invocation, info);
+ // RexxString *message = activity->buildMessage(isRoutine() ? Message_Translations_routine_invocation : Message_Translations_method_invocation, info);
+    RexxString *message = activity->buildMessage(context->isMethod() ? Message_Translations_method_invocation : Message_Translations_routine_invocation, info);
     p = message;
 
     // we build this directly into a raw character string.
     size_t outlength = message->getLength() + INSTRUCTION_OVERHEAD;
     RexxString *buffer = raw_string(outlength);
+    ProtectedObject p2(buffer);
     // insert the leading blanks for the prefix area
     buffer->set(0, ' ', INSTRUCTION_OVERHEAD);
     // copy in the prefix information
-    buffer->put(PREFIX_OFFSET, trace_prefix_table[TRACE_PREFIX_INVOCATION], PREFIX_LENGTH);
+    buffer->put(PREFIX_OFFSET, trace_prefix_table[tp], PREFIX_LENGTH);
     // copy the message stuff over this
     buffer->put(INSTRUCTION_OVERHEAD, message->getStringData(), message->getLength());
     // and write out the trace line
-    activity->traceOutput(this, buffer);
+    processTraceInfo(activity, buffer, tp, NULLOBJECT, NULLOBJECT);
 }
 
 
@@ -3545,7 +3717,7 @@ void RexxActivation::traceValue(RexxObject *value, TracePrefix prefix)
     buffer->putChar(TRACE_OVERHEAD - 2 + settings.traceIndent * INDENT_SPACING, '\"');
     buffer->put(TRACE_OVERHEAD - 1 + settings.traceIndent * INDENT_SPACING, stringvalue->getStringData(), stringvalue->getLength());
     buffer->putChar(outlength - 1, '\"');
-    activity->traceOutput(this, buffer);
+    processTraceInfo(activity, buffer, prefix, NULLOBJECT, NULLOBJECT);
 }
 
 
@@ -3572,7 +3744,7 @@ void RexxActivation::traceTaggedValue(TracePrefix prefix, const char *tagPrefix,
     }
 
     // get the string value from the traced object.
-    RexxString *stringVal = value->stringValue();
+    Protected<RexxString> stringVal = value->stringValue();
 
     // now calculate the length of the traced string
     size_t outLength = tag->getLength() + stringVal->getLength();
@@ -3635,7 +3807,7 @@ void RexxActivation::traceTaggedValue(TracePrefix prefix, const char *tagPrefix,
     buffer->putChar(dataOffset, '\"');
     dataOffset++;
                                        /* write out the line                */
-    activity->traceOutput(this, buffer);
+    processTraceInfo(activity, buffer, prefix, tag, value);
 }
 
 
@@ -3708,7 +3880,7 @@ void RexxActivation::traceOperatorValue(TracePrefix prefix, const char *tag, Rex
     buffer->putChar(dataOffset, '\"');
     dataOffset++;
                                        /* write out the line                */
-    activity->traceOutput(this, buffer);
+    processTraceInfo(activity, buffer, prefix, NULLOBJECT, NULLOBJECT);
 }
 
 
@@ -3760,9 +3932,6 @@ void RexxActivation::traceCompoundValue(TracePrefix prefix, RexxString *stemName
 
     outLength += tail.getLength();
 
-    // add in the number of added dots
-    outLength += tailCount - 1;
-
     // these are fixed overheads
     outLength += TRACE_OVERHEAD + strlen(marker);
     // now the indent spacing
@@ -3801,7 +3970,7 @@ void RexxActivation::traceCompoundValue(TracePrefix prefix, RexxString *stemName
     buffer->putChar(dataOffset, '\"');
     dataOffset++;
                                        /* write out the line                */
-    activity->traceOutput(this, buffer);
+    processTraceInfo(activity, buffer, prefix, NULLOBJECT, NULLOBJECT);
 }
 
 
@@ -3823,12 +3992,13 @@ void RexxActivation::traceSourceString()
     // and build the trace line into a raw string
     size_t outlength = string->getLength() + INSTRUCTION_OVERHEAD + 2;
     RexxString *buffer = raw_string(outlength);
+    ProtectedObject p(buffer);
     buffer->set(0, ' ', INSTRUCTION_OVERHEAD);
     buffer->put(PREFIX_OFFSET, trace_prefix_table[TRACE_PREFIX_ERROR], PREFIX_LENGTH);
     buffer->putChar(INSTRUCTION_OVERHEAD, '\"');
     buffer->put(INSTRUCTION_OVERHEAD + 1, string->getStringData(), string->getLength());
     buffer->putChar(outlength - 1, '\"');
-    activity->traceOutput(this, buffer);
+    processTraceInfo(activity, buffer, TRACE_OUTPUT_SOURCE, NULLOBJECT, NULLOBJECT);
 }
 
 
@@ -4047,7 +4217,7 @@ bool RexxActivation::doDebugPause()
         if (!settings.wasDebugPromptIssued())
         {
             // write the initial prompt and turn off for the next time.
-            activity->traceOutput(this, Interpreter::getMessageText(Message_Translations_debug_prompt));
+            processTraceInfo(activity, Interpreter::getMessageText(Message_Translations_debug_prompt), TRACE_OUTPUT, NULLOBJECT, NULLOBJECT);
             settings.setDebugPromptIssued(true);
         }
         // save the next instruction in case we're asked to re-execute
@@ -4071,6 +4241,7 @@ bool RexxActivation::doDebugPause()
             }
             else
             {
+                ProtectedObject p(response);
                 // interpret the instruction
                 debugInterpret(response);
                 // if we've had a flow of control change, we're done.
@@ -4109,6 +4280,7 @@ void RexxActivation::traceClause(RexxInstruction *clause, TracePrefix prefix)
     }
     // format the trace line
     RexxString *line = formatTrace(clause, code->getPackageObject());
+    ProtectedObject p(line);
     // do we have a real source line we can trace, go output it.
     if (line != OREF_NULL)
     {
@@ -4117,7 +4289,7 @@ void RexxActivation::traceClause(RexxInstruction *clause, TracePrefix prefix)
         {
             traceSourceString();
         }
-        activity->traceOutput(this, line);
+        processTraceInfo(activity, line, prefix, NULLOBJECT, NULLOBJECT);
     }
 }
 
@@ -4850,8 +5022,9 @@ StackFrameClass *RexxActivation::createStackFrame()
     // calling this in the constructor argument list can cause the stack frame instance
     // to be inadvertently reclaimed if a GC is triggered while evaluating the constructor
     // arguments.
-    RexxString *traceback = getTraceBack();
-    return new StackFrameClass(type, getMessageName(), getExecutableObject(), target, arguments, traceback, getContextLineNumber());
+    Protected<RexxString> traceback = getTraceBack();
+
+    return new StackFrameClass(type, getMessageName(), getExecutableObject(), target, arguments, traceback, getContextLineNumber(), getIdntfr(), getContextObject());
 }
 
 /**
@@ -4939,3 +5112,176 @@ void RexxActivation::removeFileName(RexxString *fullName)
         while (removed != OREF_NULL);
     }
 }
+
+
+
+
+// ---- begin TraceObject; caching class for performance reasons (if the Rexx user
+//      should be allowed to change the class object after tracing has started, we
+//      need to change the logic to do the findClass() each time)
+inline RexxClass *getRexxPackageTraceObject()    // only do the findClass() once
+{
+    static RexxClass *RexxPackageTraceObject = OREF_NULL;
+    if (RexxPackageTraceObject==OREF_NULL)
+    {
+        RexxObject *t = OREF_NULL;   // required for the findClass call
+        RexxPackageTraceObject = TheRexxPackage->findClass(GlobalNames::TRACEOBJECT, t);
+    }
+    return RexxPackageTraceObject;
+}
+
+/** Create an instance of TraceObject and fill in trace information, depending on the
+ *  tracePrefix.
+ *
+ * @param traceLine a RexxString
+ * @param tracePrefix a TracePrefix enum
+ * @param tag a RexxString, e.g. the variable name
+ * @param value a RexxObject
+ * @return the created TraceObject (a StringTable)
+ *
+ */
+StringTable * RexxActivation::createTraceObject(Activity *activity, RexxActivation *activation, RexxString *traceline, TracePrefix tracePrefix, RexxString *tag, RexxObject *value)
+{
+    ProtectedObject result;
+    StringTable *traceObject = (StringTable *) getRexxPackageTraceObject()->messageSend(GlobalNames::NEW, OREF_NULL, 0, result);
+    ProtectedObject p(traceObject);
+
+    traceObject -> put(traceline, GlobalNames::TRACELINE );
+    traceObject -> put(new_integer(activity->getInstance()->getIdntfr()), GlobalNames::INTERPRETER );
+    traceObject -> put(new_integer(activity->getIdntfr()), GlobalNames::THREAD );
+
+    traceObject -> put(new_integer(activation ? activation->getIdntfr() : 0), GlobalNames::INVOCATION);
+
+    // make sure we save the stackFrame information in a StringTable
+    Protected<StackFrameClass> stackFrame = ( activation ?  activation->createStackFrame() : NULL);
+    Protected<RexxObject> sfast = ((RexxObject *)stackFrame) ? getStackFrameAsStringTable(stackFrame) : TheNilObject;
+    traceObject -> put(sfast, GlobalNames::STACKFRAME);
+
+    // tracing a variable, create and fill in a StringTable with the variable related information
+    if (tracePrefix == TRACE_PREFIX_VARIABLE || tracePrefix == TRACE_PREFIX_ASSIGNMENT)
+    {
+        Protected<StringTable> varStringTable = new_string_table();
+        traceObject -> put(varStringTable,   GlobalNames::VARIABLE);
+        varStringTable -> put(tag,           GlobalNames::NAME);
+        varStringTable -> put(value,         GlobalNames::VALUE);
+        varStringTable -> put(tracePrefix == TRACE_PREFIX_ASSIGNMENT ? TheTrueObject : TheFalseObject, GlobalNames::ASSIGNMENT);
+    }
+    else if (tracePrefix == TRACE_PREFIX_INVOCATION)    // tracing an invocation entry
+    {
+        Protected<StackFrameClass> stackFrame = activity -> generateCallerStackFrame(true);
+        if ((RexxObject *)stackFrame)
+        {
+            Protected<StringTable> sfast = getStackFrameAsStringTable(stackFrame);
+            traceObject -> put(sfast, GlobalNames::CALLERSTACKFRAME);
+        }
+        else
+        {
+            if (activity -> spawnerStackFrameInfo)  // spawner's frame infos saved as a StringTable?
+            {
+                // allows for analyzing trace logs to identify the caller of a spawned activity
+                traceObject -> put(activity -> spawnerStackFrameInfo, GlobalNames::CALLERSTACKFRAME);
+            }
+            else
+            {
+                traceObject -> put(TheNilObject, GlobalNames::CALLERSTACKFRAME);
+            }
+        }
+    }
+
+    // METHODCALL, fill in method related information
+    if (activation && activation -> isMethod())
+    {
+        traceObject -> put(new_integer(activation -> getVariableDictionary()->getIdntfr()), GlobalNames::ATTRIBUTEPOOL);
+        traceObject -> put(activation -> isGuarded() ? TheTrueObject : TheFalseObject, GlobalNames::ISGUARDED );
+        traceObject -> put(new_integer(activation -> getReserveCount()), GlobalNames::SCOPELOCKCOUNT);
+        traceObject -> put(activation -> isObjectScopeLocked() ? TheTrueObject : TheFalseObject, GlobalNames::HASSCOPELOCK);
+            // although receiver can be fetched via StackFrame's target, allow speeding up for debugger, hence add it always here as well
+        traceObject -> put(activation -> getReceiver(), GlobalNames::RECEIVER);
+
+        // check result of an evaluated guard condition
+        if (tracePrefix == TRACE_PREFIX_KEYWORD)    // evaluation of the guard condition?
+        {
+            const char* tmpTag = tag -> getStringData();
+            // if a guard condition got evaluated tag will be "WHEN" and value exactly "0" or "1"
+            if (strcmp(tmpTag,"WHEN") == 0)
+            {
+                const char* tmpValue = value -> requestString() -> getStringData();
+                traceObject -> put((tmpValue[0]=='0') ? TheTrueObject : TheFalseObject, GlobalNames::ISWAITING);
+            }
+        }
+    }
+
+    return traceObject;
+}
+
+
+/** Processes trace information and outputs it.
+ *
+ * @param traceLine the trace line to display
+ * @param tracePrefix the kind of trace taking place
+ * @param tag optional RexxString, e.g. the traced variable name
+ * @param value optional RexxObject, e.g. the traced variable value
+ */
+void RexxActivation::processTraceInfo(Activity *activity, RexxString *traceLine, TracePrefix tracePrefix, RexxString *tag, RexxObject *value)
+{
+   // make sure this is a real string value (likely, since we constructed it in the first place)
+   Protected<RexxString> pline = traceLine->stringTrace();
+   Protected<StringTable> traceObject=createTraceObject(activity, this, pline, tracePrefix, tag, value);
+   activity->traceOutput(this, pline, traceObject);
+}
+
+
+/** Outputs the line using the trace output destination.
+ *
+ * @param traceLine the trace line to display
+ */
+void RexxActivation::displayUsingTraceOutput(Activity *activity, RexxString *traceLine)
+{
+   processTraceInfo(activity, traceLine, TRACE_OUTPUT, NULLOBJECT, NULLOBJECT);
+}
+
+
+/** Creates a StringTable with all entries from the supplied StackFrame object.
+ *  The executable object may not be present anymore, if its reference gets used
+ *  much later, e.g. in the case that a trace log gets created and analyzed after
+ *  the activity and the executable are potentially gone out of scope. Therefore
+ *  executable related information is explicitly queried and saved in form of
+ *  strings in the string table (executable's hashId, executable's name,
+ *  executable's package's name; if excutable is a method, then its scope's hashId,
+ *  its scope's name, its scope's package).
+ *  <br>
+ *  In the case the target is available it is an ooRexx object
+ *  that will remain available as long as it gets referred to (e.g. because of
+ *  being stored in an array like this one).
+ *
+
+using
+*   the identityHash of the StackFrame entries EXECUTABLE and TARGET if they are not
+*   .nil.
+*
+*   @param stackFrame the StackFrame object to use, may be NULLOBJECT
+*   @return a StringTable with all the entries of stackFrame, if available
+*/
+StringTable * RexxActivation::getStackFrameAsStringTable(StackFrameClass * stackFrame)
+{
+    Protected<StringTable> tmpStringTable = new_string_table();
+    if (stackFrame != NULLOBJECT)
+    {
+        ProtectedObject result;
+        // array
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::ARGUMENTS , result), GlobalNames::ARGUMENTS );
+
+        // strings
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::INVOCATION, result), GlobalNames::INVOCATION);
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::LINE      , result), GlobalNames::LINE      );
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::NAME      , result), GlobalNames::NAME      );
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::TRACELINE , result), GlobalNames::TRACELINE );
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::TYPE      , result), GlobalNames::TYPE      );
+
+        // objects
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::EXECUTABLE, result), GlobalNames::EXECUTABLE);
+        tmpStringTable -> put(stackFrame->sendMessage(GlobalNames::TARGET    , result), GlobalNames::TARGET    );
+    }
+    return tmpStringTable;
+}
+

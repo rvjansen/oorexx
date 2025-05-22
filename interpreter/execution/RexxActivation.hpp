@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -68,7 +68,6 @@ class CommandIOConfiguration;
 class CommandIOContext;
 class RoutineClass;
 
-
 /**
  * An activation of a section of Rexx code.
  */
@@ -90,24 +89,30 @@ class RexxActivation : public ActivationBase
      */
     typedef enum
     {
-        TRACE_PREFIX_CLAUSE   ,
-        TRACE_PREFIX_ERROR    ,
-        TRACE_PREFIX_RESULT   ,
-        TRACE_PREFIX_DUMMY    ,
-        TRACE_PREFIX_VARIABLE ,
-        TRACE_PREFIX_DOTVARIABLE ,
-        TRACE_PREFIX_LITERAL  ,
-        TRACE_PREFIX_FUNCTION ,
-        TRACE_PREFIX_PREFIX   ,
-        TRACE_PREFIX_OPERATOR ,
-        TRACE_PREFIX_COMPOUND ,
-        TRACE_PREFIX_MESSAGE  ,
-        TRACE_PREFIX_ARGUMENT ,
-        TRACE_PREFIX_ASSIGNMENT,
-        TRACE_PREFIX_INVOCATION,
-        TRACE_PREFIX_NAMESPACE,
-        TRACE_PREFIX_KEYWORD,
-        TRACE_PREFIX_ALIAS,
+        TRACE_PREFIX_CLAUSE   ,         //  0
+        TRACE_PREFIX_ERROR    ,         //  1
+        TRACE_PREFIX_RESULT   ,         //  2
+        TRACE_PREFIX_DUMMY    ,         //  3
+        TRACE_PREFIX_VARIABLE ,         //  4
+        TRACE_PREFIX_DOTVARIABLE ,      //  5
+        TRACE_PREFIX_LITERAL  ,         //  6
+        TRACE_PREFIX_FUNCTION ,         //  7
+        TRACE_PREFIX_PREFIX   ,         //  8
+        TRACE_PREFIX_OPERATOR ,         //  9
+        TRACE_PREFIX_COMPOUND ,         // 10
+        TRACE_PREFIX_MESSAGE  ,         // 11
+        TRACE_PREFIX_ARGUMENT ,         // 12
+        TRACE_PREFIX_ASSIGNMENT,        // 13
+        TRACE_PREFIX_INVOCATION,        // 14
+        TRACE_PREFIX_NAMESPACE,         // 15
+        TRACE_PREFIX_KEYWORD,           // 16
+        TRACE_PREFIX_ALIAS,             // 17
+        TRACE_PREFIX_INVOCATION_EXIT,   // 18
+
+        // note: these values are for tagging, not for retrieving strings from the prefix table
+        TRACE_OUTPUT_SOURCE = 30,   // for: void RexxActivation::traceSourceString()
+        TRACE_OUTPUT,               // for: bool RexxActivation::doDebugPause(), void Activity::displayDebug(DirectoryClass *exobj),
+                                    //      void Activity::display(DirectoryClass *exobj),
     } TracePrefix;
 
    void *operator new(size_t);
@@ -122,6 +127,7 @@ class RexxActivation : public ActivationBase
    void live(size_t) override;
    void liveGeneral(MarkReason reason) override;
 
+   uint32_t getIdntfr();
    RexxObject *dispatch() override;
    wholenumber_t digits() override;
    wholenumber_t fuzz() override;
@@ -229,6 +235,7 @@ class RexxActivation : public ActivationBase
    void              traceSourceString();
    void              traceClause(RexxInstruction *, TracePrefix);
    void              traceEntry();
+   void              traceEntryOrExit(TracePrefix);
    void              resetElapsed();
    RexxString      * formatTrace(RexxInstruction *, PackageClass *);
    RexxString      * getTraceBack();
@@ -255,7 +262,7 @@ class RexxActivation : public ActivationBase
    RexxObject      * rexxVariable(RexxString *);
    void              pushEnvironment(RexxObject *);
    RexxObject      * popEnvironment();
-   void              processTraps();
+   bool              processTraps();
    void              mergeTraps(QueueClass *);
    uint64_t          getRandomSeed(RexxInteger *);
    VariableDictionary *getObjectVariables();
@@ -407,6 +414,9 @@ class RexxActivation : public ActivationBase
    inline bool              isTopLevel() { return (activationContext&TOP_LEVEL_CALL) != 0; }
    inline bool              isGuarded() { return settings.isGuarded(); }
    inline void              setGuarded() { settings.setGuarded(true); }
+   inline bool              isObjectScopeLocked() { return this->objectScope == SCOPE_RESERVED; } // for concurrency trace
+   unsigned short           getReserveCount() { VariableDictionary *ovd = this->getVariableDictionary(); return ovd ? ovd->getReserveCount() : 0; } // for concurrency trace. Try to get the ovd counter, even if not yet assigned to current activation.
+   VariableDictionary *     getVariableDictionary() { return this->receiver ? this->receiver->getObjectVariables(this->scope) : NULL; } // for concurrency trace. Try to get the ovd, even if not yet assigned to current activation.
 
           void              enableExternalTrace();
           void              disableExternalTrace();
@@ -598,7 +608,14 @@ class RexxActivation : public ActivationBase
    // marker used for tagged traces to separate tag from the value
    static const char *ASSIGNMENT_MARKER;
 
+   void displayUsingTraceOutput(Activity *, RexxString *);
+
+   static StringTable *getStackFrameAsStringTable(StackFrameClass *);
+
  protected:
+
+    static StringTable * createTraceObject(Activity *, RexxActivation *, RexxString *line, TracePrefix tracePrefix, RexxString *tag, RexxObject *value);
+    void processTraceInfo(Activity *, RexxString *traceLine, TracePrefix tracePrefix, RexxString *tag, RexxObject *value);
 
     ActivationSettings   settings;      // inherited REXX settings
     ExpressionStack      stack;         // current evaluation stack
@@ -615,6 +632,8 @@ class RexxActivation : public ActivationBase
     RexxInstruction     *next;          // next instruction to execute
     bool                 debugPause;    // executing a debug pause
     bool                 clauseBoundary;// special flag for clause boundary checks
+    bool                 traceEntryAllowed; // true if first instruction (other than expose)
+    bool                 traceEntryDone;// true if the entry in a routine or method has been traced
     RexxObject          *result;        // result of execution
     ArrayClass          *trapInfo;      // current trap handler
     RexxContext         *contextObject; // the context object representing the execution context
@@ -631,5 +650,6 @@ class RexxActivation : public ActivationBase
     bool                 randomSet;     // random seed has been set
     size_t               blockNest;     // block instruction nesting level
     size_t               instructionCount;  // The number of instructions since we last yielded control
+    uint32_t             idntfr;        // idntfr for concurrency trace
  };
  #endif

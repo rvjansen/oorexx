@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -980,6 +980,7 @@ PCPPM CPPCode::exportedMethods[] =
     CPPM(QueueClass::pullRexx),
     CPPM(QueueClass::peek),
     CPPM(QueueClass::putRexx),
+    CPPM(QueueClass::deleteRexx),
 
     CPPM(QueueClass::newRexx),
     CPPM(QueueClass::ofRexx),
@@ -1257,6 +1258,9 @@ PCPPM CPPCode::exportedMethods[] =
     CPPM(RexxContext::getArgs),
     CPPM(RexxContext::getCondition),
     CPPM(RexxContext::getLine),
+    CPPM(RexxContext::getInvocation),
+    CPPM(RexxContext::getThread),
+    CPPM(RexxContext::getInterpreter),
     CPPM(RexxContext::getRS),
     CPPM(RexxContext::getName),
     CPPM(RexxContext::getStackFrames),
@@ -1264,6 +1268,8 @@ PCPPM CPPCode::exportedMethods[] =
     CPPM(StackFrameClass::getName),
     CPPM(StackFrameClass::getExecutable),
     CPPM(StackFrameClass::getLine),
+    CPPM(StackFrameClass::getInvocation),
+    CPPM(StackFrameClass::getContext),
     CPPM(StackFrameClass::getTraceLine),
     CPPM(StackFrameClass::getType),
     CPPM(StackFrameClass::getTarget),
@@ -1348,7 +1354,7 @@ CPPCode *CPPCode::resolveExportedMethod(const char *name, PCPPM targetMethod, si
     }
 
     char buffer[256];
-    sprintf(buffer, "Unresolved exported method:  %s, entrypoint: %s", name, entryPointName == NULL ? "<unknown>" : entryPointName);
+    snprintf(buffer, sizeof(buffer), "Unresolved exported method:  %s, entrypoint: %s", name, entryPointName == NULL ? "<unknown>" : entryPointName);
     // this is a terminal error...problems in initial definitions
     Interpreter::logicError(buffer);
     return NULL;

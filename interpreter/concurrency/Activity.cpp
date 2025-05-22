@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -78,8 +78,12 @@
 #include "MutexSemaphore.hpp"
 #include "IdentityTableClass.hpp"
 
+#include "StringTableClass.hpp"
+
 #include <stdio.h>
 #include <time.h>
+#include <atomic>
+#include <unordered_map>
 
 
 const size_t ACT_STACK_SIZE = 20;
@@ -95,6 +99,17 @@ const size_t ACT_STACK_SIZE = 20;
 void *Activity::operator new(size_t size)
 {
    return new_object(size, T_Activity);
+}
+
+
+static std::atomic<uint32_t> counter(0); // to generate idntfr for concurrency trace information
+static std::unordered_map<thread_id_t, uint32_t> threadIDs; // to associate idntfr to system threads
+
+uint32_t Activity::getIdntfr()
+{
+    thread_id_t threadID = currentThread.getThreadID();
+    if (threadIDs.find(threadID) == threadIDs.end()) threadIDs[threadID] = ++counter;
+    return threadIDs[threadID];
 }
 
 
@@ -117,6 +132,7 @@ void Activity::live(size_t liveMark)
     memory_mark(waitingObject);
     memory_mark(dispatchMessage);
     memory_mark(heldMutexes);
+    memory_mark(spawnerStackFrameInfo);
 
     // have the frame stack do its own marking.
     frameStack.live(liveMark);
@@ -150,6 +166,7 @@ void Activity::liveGeneral(MarkReason reason)
     memory_mark_general(waitingObject);
     memory_mark_general(dispatchMessage);
     memory_mark_general(heldMutexes);
+    memory_mark_general(spawnerStackFrameInfo);
 
     /* have the frame stack do its own marking. */
     frameStack.liveGeneral(reason);
@@ -167,9 +184,11 @@ void Activity::liveGeneral(MarkReason reason)
  */
 void Activity::runThread()
 {
-    int32_t base;
     // establish the stack base pointer for control stack full detection.
-    stackBase = currentThread.getStackBase(&base, TOTAL_STACK_SIZE);
+    // the stack base is the lowest address of the stack. The stack grows from the
+    // highest address downward. When it hits the line in the sand we've drawn,
+    // we raise a control stack full error.
+    stackLimit = currentThread.getStackBase() + errorRecoveryStack;
 
     for (;;)
     {
@@ -333,12 +352,10 @@ Activity::Activity(GlobalProtectedObject &p, bool createThread)
     // active activity, which we can't guarantee at this point.
     p = this;
 
-    int32_t base;         // used for determining the stack base
-
     // globally clear the object because we could be reusing the
     // object storage
     clearObject();
-    // we need a stack that activaitons can use
+    // we need a stack that activations can use
     activations = new_internalstack(ACT_STACK_SIZE);
     // The framestack creates space for expression stacks and local variable tables
     frameStack.init();
@@ -372,7 +389,9 @@ Activity::Activity(GlobalProtectedObject &p, bool createThread)
         // the main thread might shut us down before we get a chance to perform
         // whatever function we're getting asked to run.
         activate();
-        currentThread.create(this, C_STACK_SIZE);
+
+        // we create the new thread with the same size stack as the parent thread
+        currentThread.create(this, currentThread.getStackSize());
     }
     // we are creating an activity that represents the thread
     // we're currently executing on.
@@ -381,7 +400,8 @@ Activity::Activity(GlobalProtectedObject &p, bool createThread)
         // run on the current thread
         currentThread.useCurrentThread();
         // reset the stack base for this thread.
-        stackBase = currentThread.getStackBase(&base, TOTAL_STACK_SIZE);
+        // establish the stack base pointer for control stack full detection.
+        stackLimit = currentThread.getStackBase() + errorRecoveryStack;
     }
 }
 
@@ -976,7 +996,7 @@ DirectoryClass* Activity::createExceptionObject(RexxErrorCodes errcode,
     char work[32];
 
     // get a version of the error code formatted in "dot" format.
-    sprintf(work, "%d.%1zd", errcode / 1000, errcode - primary);
+    snprintf(work, sizeof(work), "%d.%1zd", errcode / 1000, errcode - primary);
     RexxString *code = new_string(work);
     exobj->put(code, GlobalNames::CODE);
 
@@ -1068,7 +1088,7 @@ void Activity::generateProgramInformation(DirectoryClass *exobj)
 
     while (frame != NULL)
     {
-        StackFrameClass *stackFrame = frame->createStackFrame();
+        Protected<StackFrameClass> stackFrame = frame->createStackFrame();
         // save the topmost package object we can find for error reporting
         if (package == OREF_NULL && frame->getPackage() != OREF_NULL)
         {
@@ -1132,13 +1152,57 @@ ArrayClass* Activity::generateStackFrames(bool skipFirst)
         }
         else
         {
-            StackFrameClass *stackFrame = frame->createStackFrame();
+            Protected<StackFrameClass> stackFrame = frame->createStackFrame();
             stackFrames->append(stackFrame);
         }
         frame = frame->next;
     }
     return stackFrames;
 }
+
+
+/**
+ * Generate the caller's stack frame.
+ *
+ * @param skipFirst Determines if we should skip the first frame:
+ *                  false for reply in RexxActivation::run(...),
+ *                  true for Message::start() and in the general case.
+ *
+ * @return The stackframe of the caller which caused a spawned activity.
+ */
+StackFrameClass* Activity::generateCallerStackFrame(bool skipFirst)
+{
+    ActivationFrame *frame = activationFrames;
+    StackFrameClass *callerStackFrame = NULL;
+
+    if (frame && skipFirst)
+    {
+        frame = frame->next;
+    }
+    if (frame)
+    {
+        callerStackFrame = frame->createStackFrame();
+    }
+    return callerStackFrame;
+}
+
+
+/**
+ * Generates and saves a StringTable to store stackFrame infos of oldActivity in newActivity
+ * (for TraceObject), used by MessageClass::start().
+ *
+ */
+void Activity::setCallerStackFrameAsStringTable(Activity *oldActivity, Activity *newActivity, bool skipFirst)
+{
+    // get caller stackframe, if any
+    Protected<StackFrameClass> oldActivityStackFrame = oldActivity -> generateCallerStackFrame(skipFirst);
+    // returns a StringTable that may be empty if oldActivityStackFrame==NULLOBJECT
+    newActivity -> spawnerStackFrameInfo=RexxActivation::getStackFrameAsStringTable(oldActivityStackFrame);
+    // save thread ID to indicate from which thread ID the spawnReply() came from (helpful, e.g., if StringTable is empty)
+    newActivity -> spawnerStackFrameInfo -> put(new_integer(oldActivity -> getIdntfr()), GlobalNames::THREAD);
+    return;
+}
+
 
 
 /**
@@ -1288,7 +1352,7 @@ void Activity::reraiseException(DirectoryClass *exobj)
     if (errornumber != primary)
     {
         char work[22];
-        sprintf(work, "%1zd%3.3zd", errornumber / 1000, errornumber - primary);
+        snprintf(work, sizeof(work), "%1zd%3.3zd", errornumber / 1000, errornumber - primary);
         errornumber = atol(work);
 
         RexxString *message = Interpreter::getMessageText(errornumber);
@@ -1361,7 +1425,7 @@ void Activity::display(DirectoryClass *exobj)
             // if we have a real line, write it out
             if (text != OREF_NULL && text != TheNilObject)
             {
-                traceOutput(currentRexxFrame, text);
+                currentRexxFrame->displayUsingTraceOutput(this, text);
             }
         }
     }
@@ -1394,7 +1458,7 @@ void Activity::display(DirectoryClass *exobj)
 
     // and finally the primary error message
     text = text->concat((RexxString *)exobj->get(GlobalNames::ERRORTEXT));
-    traceOutput(currentRexxFrame, text);
+    currentRexxFrame->displayUsingTraceOutput(this, text);
 
     // now add the secondary message if we have one.
     RexxString *secondary = (RexxString *)exobj->get(GlobalNames::MESSAGE);
@@ -1409,7 +1473,7 @@ void Activity::display(DirectoryClass *exobj)
         text = text->concat(secondary);
 
         // and write that out also
-        traceOutput(currentRexxFrame, text);
+        currentRexxFrame->displayUsingTraceOutput(this, text);
     }
 }
 
@@ -1429,7 +1493,7 @@ void Activity::displayDebug(DirectoryClass *exobj)
     text = text->concatWith((exobj->get(GlobalNames::RC))->requestString(), ' ');
     text = text->concatWithCstring(":  ");
     text = text->concatWith((RexxString *)exobj->get(GlobalNames::ERRORTEXT), ' ');
-    traceOutput(currentRexxFrame, text);
+    currentRexxFrame->displayUsingTraceOutput(this, text);
 
 
     // now any secondary message
@@ -1440,7 +1504,7 @@ void Activity::displayDebug(DirectoryClass *exobj)
         text = text->concatWith((RexxString *)exobj->get(GlobalNames::CODE), ' ');
         text = text->concatWithCstring(":  ");
         text = text->concat(secondary);
-        traceOutput(getCurrentRexxFrame(), text);
+        currentRexxFrame->displayUsingTraceOutput(this, text);
     }
 }
 
@@ -1483,7 +1547,7 @@ void Activity::checkActivationStack()
     if (stackFrameDepth == activationStackSize)
     {
         // allocate a larger stack
-        InternalStack *newstack = new_internalstack(activationStackSize + ACT_STACK_SIZE);
+        InternalStack *newstack = new_internalstack(activationStackSize * 2);
         // now copy all of the entries over to the new frame stack
         for (size_t i = activationStackSize; i != 0; i--)
         {
@@ -1491,7 +1555,7 @@ void Activity::checkActivationStack()
         }
         // update the frame information
         activations = newstack;
-        activationStackSize += ACT_STACK_SIZE;
+        activationStackSize *= 2;
     }
 }
 
@@ -2196,13 +2260,12 @@ void Activity::checkStackSpace()
 /* Function:  Make sure there is enough stack space to run a method           */
 /******************************************************************************/
 {
-#ifdef STACKCHECK
+    // note that we use a size_t variable here to get proper alignment
     size_t temp;                          // if checking and there isn't room
-    if (((char *)&temp - (char *)stackBase) < MIN_C_STACK && stackcheck == true)
+    if ((char *)&temp < stackLimit && stackcheck == true)
     {
         reportException(Error_Control_stack_full);
     }
-#endif
 }
 
 
@@ -2211,7 +2274,7 @@ void Activity::checkStackSpace()
  *
  * @return The .local directory.
  */
-DirectoryClass *Activity::getLocal()
+DirectoryClass* Activity::getLocal()
 {
     // the interpreter instance owns this
     return instance->getLocal();
@@ -2259,9 +2322,9 @@ void Activity::queryTrcHlt()
  *
  * @return The exit handling state.
  */
-bool Activity::callExit(RexxActivation * activation,
-    const char *exitName, int function,
-    int subfunction, void *exitbuffer)
+bool Activity::callExit(RexxActivation *activation,
+                        const char *exitName, int function,
+                        int subfunction, void *exitbuffer)
 {
     ExitHandler &handler = getExitHandler(function);
 
@@ -2436,7 +2499,7 @@ bool Activity::callDebugInputExit(RexxActivation *activation, RexxString *&input
  * @return The handled flag.
  */
 bool Activity::callFunctionExit(RexxActivation *activation, RexxString *rname, bool isFunction,
-    ProtectedObject &funcresult, RexxObject **arguments, size_t argcount)
+                                ProtectedObject &funcresult, RexxObject **arguments, size_t argcount)
 {
 
     if (isExitEnabled(RXFNC))
@@ -2466,8 +2529,8 @@ bool Activity::callFunctionExit(RexxActivation *activation, RexxString *rname, b
         // allocate enough memory for all arguments.
         // At least one item needs to be allocated in order to avoid an error
         // in the sysexithandler!
-        PCONSTRXSTRING argrxarray = (PCONSTRXSTRING) SystemInterpreter::allocateResultMemory(
-             sizeof(CONSTRXSTRING) * std::max((size_t)exit_parm.rxfnc_argc, (size_t)1));
+        PCONSTRXSTRING argrxarray = (PCONSTRXSTRING)SystemInterpreter::allocateResultMemory(
+            sizeof(CONSTRXSTRING) * std::max((size_t)exit_parm.rxfnc_argc, (size_t)1));
         if (argrxarray == OREF_NULL)
         {
             reportException(Error_System_resources);
@@ -2475,7 +2538,7 @@ bool Activity::callFunctionExit(RexxActivation *activation, RexxString *rname, b
 
         exit_parm.rxfnc_argv = argrxarray;
 
-        for (size_t argindex=0; argindex < exit_parm.rxfnc_argc; argindex++)
+        for (size_t argindex = 0; argindex < exit_parm.rxfnc_argc; argindex++)
         {
             // classic REXX style interface
             RexxString *temp = (RexxString *)arguments[argindex];
@@ -2512,14 +2575,14 @@ bool Activity::callFunctionExit(RexxActivation *activation, RexxString *rname, b
         }
         else if (exit_parm.rxfnc_flags.rxffnfnd)
         {
-            reportException(Error_Routine_not_found_name,rname);
+            reportException(Error_Routine_not_found_name, rname);
         }
 
         // if not a function call and no return value was given, raise
         // an error
-        if (exit_parm.rxfnc_retc.strptr == OREF_NULL && isFunction )
+        if (exit_parm.rxfnc_retc.strptr == OREF_NULL && isFunction)
         {
-            reportException(Error_Function_no_data_function,rname);
+            reportException(Error_Function_no_data_function, rname);
         }
 
         if (exit_parm.rxfnc_retc.strptr)
@@ -2549,7 +2612,7 @@ bool Activity::callFunctionExit(RexxActivation *activation, RexxString *rname, b
  * @return The handled flag.
  */
 bool Activity::callObjectFunctionExit(RexxActivation *activation, RexxString *rname,
-    bool isFunction, ProtectedObject &funcresult, RexxObject **arguments, size_t argcount)
+                                      bool isFunction, ProtectedObject &funcresult, RexxObject **arguments, size_t argcount)
 {
     // give the security manager the first pass
     SecurityManager *manager = activation->getEffectiveSecurityManager();
@@ -2590,11 +2653,11 @@ bool Activity::callObjectFunctionExit(RexxActivation *activation, RexxString *rn
         }
         else if (exit_parm.rxfnc_flags.rxffnfnd)
         {
-            reportException(Error_Routine_not_found_name,rname);
+            reportException(Error_Routine_not_found_name, rname);
         }
         if (exit_parm.rxfnc_retc == NULLOBJECT && isFunction)
         {
-            reportException(Error_Function_no_data_function,rname);
+            reportException(Error_Function_no_data_function, rname);
         }
 
         // set the function result back
@@ -2620,7 +2683,7 @@ bool Activity::callObjectFunctionExit(RexxActivation *activation, RexxString *rn
  * @return The handled flag.
  */
 bool Activity::callScriptingExit(RexxActivation *activation, RexxString *rname,
-    bool isFunction, ProtectedObject &funcresult, RexxObject **arguments, size_t argcount)
+                                 bool isFunction, ProtectedObject &funcresult, RexxObject **arguments, size_t argcount)
 {
     if (isExitEnabled(RXEXF))
     {
@@ -2649,11 +2712,11 @@ bool Activity::callScriptingExit(RexxActivation *activation, RexxString *rname,
         }
         else if (exit_parm.rxfnc_flags.rxffnfnd)
         {
-            reportException(Error_Routine_not_found_name,rname);
+            reportException(Error_Routine_not_found_name, rname);
         }
         if (exit_parm.rxfnc_retc == NULLOBJECT && isFunction)
         {
-            reportException(Error_Function_no_data_function,rname);
+            reportException(Error_Function_no_data_function, rname);
         }
 
         // set the function result back
@@ -3000,7 +3063,7 @@ bool Activity::callNovalueExit(RexxActivation *activation, RexxString *variableN
  * @return The handled flag.
  */
 bool Activity::callValueExit(RexxActivation *activation, RexxString *selector, RexxString *variableName,
-    RexxObject *newValue, ProtectedObject &value)
+                             RexxObject *newValue, ProtectedObject &value)
 {
     if (isExitEnabled(RXVALUE))         // is the exit enabled?
     {
@@ -3029,7 +3092,7 @@ bool Activity::callValueExit(RexxActivation *activation, RexxString *selector, R
  * @return the security manager instance in effect for the
  *         activity.
  */
-SecurityManager *Activity::getEffectiveSecurityManager()
+SecurityManager* Activity::getEffectiveSecurityManager()
 {
     // get the security manager for the top stack frame. If there is none defined, default to
     // ghe global security manager.
@@ -3050,7 +3113,7 @@ SecurityManager *Activity::getEffectiveSecurityManager()
  *
  * @return The globally defined security manager.
  */
-SecurityManager *Activity::getInstanceSecurityManager()
+SecurityManager* Activity::getInstanceSecurityManager()
 {
     // return the manager from the instance
     return instance->getSecurityManager();
@@ -3063,14 +3126,16 @@ SecurityManager *Activity::getInstanceSecurityManager()
  * @param activation The current activation context.
  * @param line       The output line
  */
-void  Activity::traceOutput(RexxActivation *activation, RexxString *line)
+void Activity::traceOutput(RexxActivation *activation, RexxString *line, StringTable *traceObject)
 {
-    // make sure this is a real string value (likely, since we constructed it in the first place)
-    line = line->stringTrace();
-
-    // if the exit passes on the call, we write this to the .traceouput
     if (callTraceExit(activation, line))
     {
+        // if in profiling mode we only let collect the traceObjects,
+        // we do not output the traceLine if currently in profiling mode
+        RexxObject *option = (RexxString *) traceObject->get(GlobalNames::OPTION); // the entry may be missing
+        if (option && ((RexxString *) option)->getStringData()[0] == 'P')
+            return;
+
         RexxObject *stream = getLocalEnvironment(GlobalNames::TRACEOUTPUT);
 
         if (stream != OREF_NULL && stream != TheNilObject)
@@ -3080,17 +3145,20 @@ void  Activity::traceOutput(RexxActivation *activation, RexxString *line)
             try
             {
                 ProtectedObject result;
-                stream->sendMessage(GlobalNames::LINEOUT, line, result);
+
+                stream->sendMessage(GlobalNames::LINEOUT, traceObject, result);
             }
             catch (NativeActivation *)
             {
+                Protected<RexxString> line = traceObject->requestString();
                 lineOut(line); // don't lose the data!
             }
         }
         // could not find the target, but don't lose the data!
         else
         {
-            lineOut(line);
+            Protected<RexxString> line = traceObject->requestString();
+            lineOut(line); // don't lose the data!
         }
     }
 }
@@ -3121,13 +3189,13 @@ void Activity::sayOutput(RexxActivation *activation, RexxString *line)
 
 
 /**
- * Read a line of internactive debug.
+ * Read a line of interactive debug.
  *
  * @param activation The activation context.
  *
  * @return The debug input string.
  */
-RexxString *Activity::traceInput(RexxActivation *activation)
+RexxString* Activity::traceInput(RexxActivation *activation)
 {
     RexxString *value;
 
@@ -3162,7 +3230,7 @@ RexxString *Activity::traceInput(RexxActivation *activation)
  *
  * @return The read input string.
  */
-RexxString *Activity::pullInput(RexxActivation *activation)
+RexxString* Activity::pullInput(RexxActivation *activation)
 {
     RexxString *value;
 
@@ -3193,11 +3261,11 @@ RexxString *Activity::pullInput(RexxActivation *activation)
  *
  * @return Returns the residual count of 0 as an integer.
  */
-RexxObject *Activity::lineOut(RexxString *line)
+RexxObject* Activity::lineOut(RexxString *line)
 {
     size_t length = line->getLength();
     const char *data = line->getStringData();
-    printf("%.*s" line_end,(int)length, data);
+    printf("%.*s" line_end, (int)length, data);
     return IntegerZero;
 }
 
@@ -3209,7 +3277,7 @@ RexxObject *Activity::lineOut(RexxString *line)
  *
  * @return The input string.
  */
-RexxString *Activity::lineIn(RexxActivation *activation)
+RexxString* Activity::lineIn(RexxActivation *activation)
 {
     RexxString *value;
 
@@ -3288,10 +3356,10 @@ void Activity::run(ActivityDispatcher &target)
 {
     // we unwind to the current activation depth on termination.
     size_t  startDepth;
-    int32_t base;         // used for determining the stack base
 
     // update the stack base
-    stackBase = currentThread.getStackBase(&base, TOTAL_STACK_SIZE);
+    stackLimit = currentThread.getStackBase() + errorRecoveryStack;
+
     // get a new random seed
     generateRandomNumberSeed();
     startDepth = stackFrameDepth;

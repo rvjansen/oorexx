@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -257,4 +257,26 @@ GLOBAL_NAME(SIGHUP_STRING, "SIGHUP")
 GLOBAL_NAME(DEFAULT_RESOURCE_END, "::END")
 GLOBAL_NAME(TIMESPAN, "TIMESPAN")
 GLOBAL_NAME(TOTALSECONDS, "TOTALSECONDS")
+
+
+GLOBAL_NAME(ASSIGNMENT,          "ASSIGNMENT")          // TraceObject: variable assignement: .true/.false
+GLOBAL_NAME(ATTRIBUTEPOOL,       "ATTRIBUTEPOOL")       // TraceObject: a counter (number)
+GLOBAL_NAME(CALLERSTACKFRAME,    "CALLERSTACKFRAME")    // TraceObject: stack frame of the caller
+GLOBAL_NAME(EXECUTABLE,          "EXECUTABLE")          // TraceObject: message and index name (StackFrame and StringTable)
+GLOBAL_NAME(HASSCOPELOCK,        "HASSCOPELOCK")        // TraceObject: .true/.false (isObjectScopeLocked)
+GLOBAL_NAME(INTERPRETER,         "INTERPRETER")         // TraceObject: a counter (number)
+GLOBAL_NAME(INVOCATION,          "INVOCATION")          // TraceObject: a counter (number)
+GLOBAL_NAME(ISGUARDED,           "ISGUARDED")           // TraceObject: .true/.false (method definition)
+GLOBAL_NAME(ISWAITING,           "ISWAITING")           // TraceObject: .true/.false (.true if guard condition yields "0")
+GLOBAL_NAME(LINE,                "LINE")                // TraceObject: message and index name (StackFrame and StringTable)
+GLOBAL_NAME(OPTION,              "OPTION")              // TraceObject: option at creation time
+GLOBAL_NAME(RECEIVER,            "RECEIVER")            // TraceObject: the receiver of a message
+GLOBAL_NAME(SCOPELOCKCOUNT,      "SCOPELOCKCOUNT")      // TraceObject: a counter (number, reserveCount)
+GLOBAL_NAME(STACKFRAME,          "STACKFRAME")          // TraceObject: the RexxActivation's stack frame
+GLOBAL_NAME(TARGET,              "TARGET")              // TraceObject: message and index name (StackFrame and StringTable)
+GLOBAL_NAME(THREAD,              "THREAD")              // TraceObject: a counter (number, activity)
+GLOBAL_NAME(TRACELINE,           "TRACELINE")           // TraceObject: a trace line string
+GLOBAL_NAME(TRACEOBJECT,         "TRACEOBJECT")         // TraceObject: class name
+GLOBAL_NAME(TYPE,                "TYPE")                // TraceObject: message and index name (StackFrame and StringTable)
+GLOBAL_NAME(VARIABLE,            "VARIABLE")            // TraceObject: a StringTable with NAME, VALUE, ASSIGNMENT: .true/.false
 

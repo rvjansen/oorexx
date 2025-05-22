@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -75,6 +75,7 @@ class NativeActivation;
 class RexxActivation;
 class GlobalProtectedObject;
 class MutexSemaphoreClass;
+class StackFrameClass;
 
 typedef enum
 {
@@ -158,6 +159,12 @@ class Activity : public RexxInternalObject
     void        unwindToFrame(RexxActivation *frame);
     void        cleanupStackFrame(ActivationBase *poppedStackFrame);
     ArrayClass  *generateStackFrames(bool skipFirst);
+
+    // allow TraceObject's callerStackFrame entry to indicate the caller that caused the spawned activity
+    StackFrameClass* generateCallerStackFrame(bool skipFirst);
+    static void setCallerStackFrameAsStringTable(Activity *oldActivity, Activity *newActivity, bool skipFirst);
+    StringTable *spawnerStackFrameInfo;
+
     Activity *spawnReply();
 
     void        exitKernel();
@@ -207,7 +214,7 @@ class Activity : public RexxInternalObject
     bool callTraceTestExit(RexxActivation *, bool);
     bool callNovalueExit(RexxActivation *, RexxString *, RexxObject *&);
     bool callValueExit(RexxActivation *, RexxString *, RexxString *, RexxObject *, ProtectedObject&);
-    void traceOutput(RexxActivation *, RexxString *);
+    void traceOutput(RexxActivation *, RexxString *, StringTable *);
     void sayOutput(RexxActivation *, RexxString *);
     void queue(RexxActivation *, RexxString *, QueueOrder);
     RexxString *traceInput(RexxActivation *);
@@ -220,6 +227,7 @@ class Activity : public RexxInternalObject
     void detachInstance();
     void detachThread();
     inline InterpreterInstance *getInstance() { return instance; }
+    uint32_t getIdntfr();
 
     void nestAttach();
     void returnAttach();
@@ -378,7 +386,7 @@ class Activity : public RexxInternalObject
     SysActivity currentThread;          // descriptor for this thread
     const NumericSettings *numericSettings; // current activation setting values
 
-    bool     stackcheck;                // stack space is to be checked
+    bool     stackcheck;                // stack space is to be checked (disabled during some error handling)
     bool     exit;                      // activity loop is to exit
     bool     requestingString;          // in error handling currently
     bool     suspended;                 // the suspension flag
@@ -390,7 +398,7 @@ class Activity : public RexxInternalObject
     size_t   nestedCount;               // extent of the nesting
     size_t   attachCount;               // extent of nested attaches
     bool     newThreadAttached;         // Indicates this thread was a "side door" attach.
-    char       *stackBase;              // pointer to base of C stack
+    char    *stackLimit;                // pointer to base to the C stack location that will trigger a control stack error
     bool        clauseExitUsed;         // halt/trace sys exit not set ==> 1
     uint64_t    randomSeed;             // random number seed
     ProtectedBase *protectedObjects;    // list of stack-based object protectors
@@ -404,6 +412,14 @@ class Activity : public RexxInternalObject
     static CallContextInterface callContextFunctions;
     static ExitContextInterface exitContextFunctions;
     static IORedirectorInterface ioRedirectorContextFunctions;
+
+    // we reserve the bottom portion of the stack so that we have some
+    // space to operate in case we have to raise a control stack error. We base
+    // this off the size of a pointer so that we allocated more space on 64-bit
+    // systems. For a 64-bit platform, this ends up being 64Kb, which is enough
+    // space for an additional 150 or so levels of method recursion, which should
+    // be more than adequate for raising an error.
+    static const size_t errorRecoveryStack = 1024 * (32 + (4 * sizeof(void *)));
 };
 
 

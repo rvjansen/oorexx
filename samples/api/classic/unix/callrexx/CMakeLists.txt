@@ -1,6 +1,6 @@
 #/*----------------------------------------------------------------------------*/
 #/*                                                                            */
-#/* Copyright (c) 2014-2021 Rexx Language Association. All rights reserved.    */
+#/* Copyright (c) 2014-2025 Rexx Language Association. All rights reserved.    */
 #/*                                                                            */
 #/* This program and the accompanying materials are made available under       */
 #/* the terms of the Common Public License v1.0 which accompanies this         */
@@ -38,14 +38,7 @@
 #/*----------------------------------------------------------------------------*/
 #/* Global settings                                                            */
 #/*----------------------------------------------------------------------------*/
-if (APPLE)
-# apple build with lower cmake version have an @rpath problem
-    cmake_minimum_required (VERSION 3.12)
-else()
-#for other platforms
-    cmake_minimum_required (VERSION 2.8.12)
-endif()
-cmake_policy(VERSION 2.8...3.3)
+cmake_minimum_required (VERSION 2.8.12...99.99)
 
 #/*----------------------------------------------------------------------------*/
 #/* Project settings                                                           */
@@ -83,7 +76,7 @@ add_executable(callrexx2 ${PROJECT_SOURCE_DIR}/callrexx2.c)
 # Include file definition
 target_include_directories(callrexx2 PUBLIC
             ${build_api_dir}
-	    ${build_api_platform_dir})
+            ${build_api_platform_dir})
 # Extra link library definitions
 target_link_libraries(callrexx2 rexx rexxapi)
 install(TARGETS callrexx2 RUNTIME DESTINATION ${DEST} ${PERM_EXECUTE})
@@ -91,13 +84,6 @@ install(FILES callrexx2.c COMPONENT Samples DESTINATION ${DEST} ${PERM_RW})
 
 
 #################### Rexx scripts invoked by the executables #########################
-# o.k. install(PROGRAMS del_macro.rex example.rex load_macro.rex macros.rex startrx1.rex startrx2.rex startrx3.rex
-#               COMPONENT Samples DESTINATION ${DEST})
-
-# install(DIRECTORY ${PROJECT_SOURCE_DIR} COMPONENT Samples DESTINATION ${DEST} FILES_MATCHING PATTERN "*.rex" ${PERM} )
-# install(DIRECTORY ${PROJECT_SOURCE_DIR} COMPONENT Samples DESTINATION ${DEST} FILES_MATCHING PATTERN "*.rex" ${PERM} )
-
-
 install(PROGRAMS del_macro.rex example.rex load_macro.rex macros.rex startrx1.rex startrx2.rex startrx3.rex
-	COMPONENT Samples DESTINATION ${DEST} ${PERM_EXECUTE})
+        COMPONENT Samples DESTINATION ${DEST} ${PERM_EXECUTE})
 

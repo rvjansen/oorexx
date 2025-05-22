@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2022 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -1259,7 +1259,7 @@ BUILTIN(DATE)
             return new_integer(timestamp.getYearDay());
 
         case 'E':
-            timestamp.formatEuropeanDate(work, outputSeparator);
+            timestamp.formatEuropeanDate(work, sizeof(work), outputSeparator);
             break;
 
         case 'L':
@@ -1267,7 +1267,7 @@ BUILTIN(DATE)
             // the month name comes from the message repository
             RexxString *month_name = Interpreter::getMessageText(Message_Translations_January + month - 1);
 
-            sprintf(work, "%zd %s %4.4zd", day, month_name->getStringData(), year);
+            snprintf(work, sizeof(work), "%zd %s %4.4zd", day, month_name->getStringData(), year);
             break;
 
         }
@@ -1277,23 +1277,23 @@ BUILTIN(DATE)
             break;
 
         case 'N':
-            timestamp.formatNormalDate(work, outputSeparator);
+            timestamp.formatNormalDate(work, sizeof(work), outputSeparator);
             break;
 
         case 'O':
-            timestamp.formatOrderedDate(work, outputSeparator);
+            timestamp.formatOrderedDate(work, sizeof(work), outputSeparator);
             break;
 
         case 'I':
-            timestamp.formatISODate(work, outputSeparator);
+            timestamp.formatISODate(work, sizeof(work), outputSeparator);
             break;
 
         case 'S':
-            timestamp.formatStandardDate(work, outputSeparator);
+            timestamp.formatStandardDate(work, sizeof(work), outputSeparator);
             break;
 
         case 'U':
-            timestamp.formatUsaDate(work, outputSeparator);
+            timestamp.formatUsaDate(work, sizeof(work), outputSeparator);
             break;
 
         case 'W':
@@ -1474,7 +1474,7 @@ BUILTIN(TIME)
             else
             {
                 // format as a long time
-                sprintf(work, "%d.%06d", (int)(threshold / (int64_t)MICROSECONDS), (int)(threshold % (int64_t)MICROSECONDS));
+                snprintf(work, sizeof(work), "%d.%06d", (int)(threshold / (int64_t)MICROSECONDS), (int)(threshold % (int64_t)MICROSECONDS));
             }
 
             // if this is a reset call, then we reset the timer also
@@ -1486,7 +1486,7 @@ BUILTIN(TIME)
         }
 
         case 'C':                         // 'C'ivil time
-            timestamp.formatCivilTime(work);
+            timestamp.formatCivilTime(work, sizeof(work));
             break;
 
         case 'H':                         // 'Hours'
@@ -1494,7 +1494,7 @@ BUILTIN(TIME)
             return new_integer(timestamp.hours);
 
         case 'L':                         // 'L'ong format
-            timestamp.formatLongTime(work);
+            timestamp.formatLongTime(work, sizeof(work));
             break;
 
         case 'M':                         // 'M'inutes format
@@ -1502,7 +1502,7 @@ BUILTIN(TIME)
             return new_integer(timestamp.hours * MINUTES_IN_HOUR + timestamp.minutes);
 
         case 'N':                         // 'N'ormal format...the default
-            timestamp.formatNormalTime(work);
+            timestamp.formatNormalTime(work, sizeof(work));
             break;
 
         case 'S':                         // 'S'econds format...total seconds
@@ -2091,8 +2091,10 @@ BUILTIN(TRACE)
     fix_args(TRACE);
 
     RexxString *setting = optional_string(TRACE, setting);
+    ProtectedObject p(setting);
     // get the existing setting before setting a new one
     RexxString *result = context->traceSetting();
+    ProtectedObject q(result);
     // if we have a new value, then set it
     if (setting != OREF_NULL)
     {

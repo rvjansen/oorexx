@@ -1,6 +1,6 @@
 #/*----------------------------------------------------------------------------*/
 #/*                                                                            */
-#/* Copyright (c) 2021 Rexx Language Association. All rights reserved.         */
+#/* Copyright (c) 2021-2025 Rexx Language Association. All rights reserved.    */
 #/*                                                                            */
 #/* This program and the accompanying materials are made available under       */
 #/* the terms of the Common Public License v1.0 which accompanies this         */
@@ -38,14 +38,7 @@
 #/*----------------------------------------------------------------------------*/
 #/* Global settings                                                            */
 #/*----------------------------------------------------------------------------*/
-if (APPLE)
-# apple build with lower cmake version have an @rpath problem
-    cmake_minimum_required (VERSION 3.12)
-else()
-#for other platforms
-    cmake_minimum_required (VERSION 2.8.12)
-endif()
-cmake_policy(VERSION 2.8...3.3)
+cmake_minimum_required (VERSION 2.8.12...99.99)
 
 #/*----------------------------------------------------------------------------*/
 #/* Project settings                                                           */
@@ -118,5 +111,4 @@ else()
 endif()
 install(FILES   external_methods_routines.cpp     COMPONENT Samples DESTINATION ${DEST} ${PERM})
 install(PROGRAMS useExternalMethodsRoutines.rex   COMPONENT Samples DESTINATION ${DEST} ${PERM_EXE})
-
 

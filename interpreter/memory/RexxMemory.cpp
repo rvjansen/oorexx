@@ -1638,6 +1638,8 @@ void MemoryObject::setOref(RexxInternalObject *oldValue, RexxInternalObject *val
     // required then.
     if (old2new != OREF_NULL)
     {
+        ProtectedObject p = value;   // because updating the table can trigger a GC, make sure this is protected.
+
         // the index value is the one assigned there currently.  If this
         // is a newspace value, we should have a table entry with a reference
         // count for it in our table.

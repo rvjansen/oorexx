@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -219,11 +219,11 @@ RexxReturnCode LocalQueueManager::createNamedQueue(const char *name, size_t size
         message.parameter1 = localManager->getSession();
 
         message.send();
-        strncpy(createdName, message.nameArg, size);
+        Utilities::strncpy(createdName, message.nameArg, size);
         // return the dup name indicator
         *dup = message.result == DUPLICATE_QUEUE_NAME;
-        // everything worked here.
-        return RXQUEUE_OK;
+        // check if we had enough space to copy the queue name
+        return strlen(message.nameArg) < size ? RXQUEUE_OK : RXQUEUE_STORAGE;
     }
     else
     {
@@ -233,11 +233,11 @@ RexxReturnCode LocalQueueManager::createNamedQueue(const char *name, size_t size
         message.parameter1 = localManager->getSession();
 
         message.send();
-        strncpy(createdName, message.nameArg, size);
+        Utilities::strncpy(createdName, message.nameArg, size);
         // by definition, this is not a duplicate
         *dup = false;
-        // everything worked here.
-        return RXQUEUE_OK;
+        // check if we had enough space to copy the queue name
+        return strlen(message.nameArg) < size ? RXQUEUE_OK : RXQUEUE_STORAGE;
     }
 }
 
@@ -469,7 +469,7 @@ RexxReturnCode LocalQueueManager::pullFromQueue(const char *name, RXSTRING &data
     // set up for either name or session queue read
     if (name != NULL)
     {
-        strcpy(message.nameArg, name);
+        Utilities::strncpy(message.nameArg, name, ServiceMessage::NAMESIZE);
     }
     else
     {
@@ -544,6 +544,9 @@ RexxReturnCode LocalQueueManager::processServiceException(ServiceException *e)
 
         case BAD_WAIT_FLAG:
             return RXQUEUE_BADWAITFLAG;
+
+        case BAD_STORAGE:
+            return RXQUEUE_STORAGE;
 
         default:
             return RXQUEUE_MEMFAIL;

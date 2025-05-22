@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -225,7 +225,7 @@ void LanguageParser::scanComment()
             if (!moreLines())
             {
                 // record the ending position in our current clause
-                clause->setEnd(lineCount, lineOffset);
+                clause->setEnd(lineNumber, lineOffset);
                 // update the error information
                 clauseLocation = clause->getLocation();
                 syntaxError(Error_Unmatched_quote_comment, new_integer(startLine));
@@ -272,7 +272,7 @@ CharacterClass LanguageParser::locateToken(unsigned int &character, bool blanksS
     // default to having an invalid character
     character = INVALID_CHARACTER;
 
-    // no more lines?  indicate a we've hit the end of the file.
+    // no more lines?  indicate we've hit the end of the file.
     if (!moreLines())
     {
         return CLAUSE_EOF;
@@ -284,7 +284,7 @@ CharacterClass LanguageParser::locateToken(unsigned int &character, bool blanksS
         return CLAUSE_EOL;
     }
 
-    // ok, we will scan as long as we have line left.
+    // ok, we will scan as long as we have lines left.
     while (moreChars())
     {
         // next character from the line.
@@ -307,7 +307,7 @@ CharacterClass LanguageParser::locateToken(unsigned int &character, bool blanksS
         // continuation, but we also need to recognize that "--" is a line comment.
         else if (inch == ',' || inch == '-')
         {
-            // line comment?  Just truncate the line and and process as if
+            // line comment?  Just truncate the line and process as if
             // we ran out of characters and hit the end of the line.
             if (inch == '-' && followingChar() == '-')
             {
@@ -425,47 +425,41 @@ RexxString* LanguageParser::packHexLiteral(size_t start, size_t length)
         return GlobalNames::NULLSTRING;
     }
 
-    // the first group gets special handling in terms of padding
-    bool firstGroup = true;
     // this is our counter for group packing
     int groupCount = 0;
     // our count of nibble characters we find...we can calculate the result length from this
     int nibbleCount = 0;
     // a pointer for scanning the data
-    const char *inPointer = current + start;
+    // scanning right-to-left makes it easier to identify correct whitespace positioning
+    const char *inPointer = current + start + length - 1;
 
     // update the current clause location in case there are any errors
     clauseLocation = clause->getLocation();
 
-    /* first scan is to check REXX rules for validity of grouping             */
-    /* and to remove blanks                                                   */
+    // first scan is to check REXX rules for validity of grouping
 
-    // this is our counter of the packed string length.  We only count
-    // the characters that get packed.
-    size_t packedlength = length;
-
-    // scan the entire input string
-    for (size_t i = 0; i < length; i++)
+    // scan the entire input string from right to left
+    for (size_t i = length; i > 0; i--)
     {
         // do we have a white space character?
         if (*inPointer == ' ' || *inPointer == '\t')
         {
             // now check to see if this is in a valid position.  We do not allow
-            // blanks at the beginning of the string, and if we are past the
-            // first group, then blanks must appear at even character boundaries.
-            if (i == 0  ||                 // this is the test for the beginning
-                (!firstGroup &&             // ok, we've processed the first group, this must be on a boundary
-                 ((groupCount & 1) != 0)))  // not evenly divisible by two...bad placement.
+            // blanks at the start or the end of the string, and blanks may
+            // only appear at even hex digit (byte) boundaries.
+            if (i == 1 || i == length) // no blank at string start or end
             {
-                // NOTE:  our position is origin 0, we need to report this using
-                // origin 1 position.
-                syntaxError(Error_Invalid_hex_hexblank, new_integer(i + 1));
+                syntaxError(Error_Invalid_hex_hexblank, new_integer(i));
 
             }
+            // not evenly divisible by two...bad blank placement
+            else if ((groupCount & 1) != 0)
+            {
+                syntaxError(Error_Invalid_hex_invhex_group);
+            }
+
             // we start a new group now
             groupCount = 0;
-            // once we see a blank, we're no longer in the first group
-            firstGroup = false;
         }
 
         // non-blank character...for now, just count how many we have.
@@ -477,23 +471,7 @@ RexxString* LanguageParser::packHexLiteral(size_t start, size_t length)
             nibbleCount++;
         }
 
-        inPointer++;                        /* step the input position           */
-    }
-
-    // now we need to check for trailing blanks.  If our last group count is
-    // now zero, which means we've not seen a real character since our last
-    // blank character.  This means trailing blanks!
-
-    if (groupCount == 0)
-    {
-        // report this at the end position...there might be
-        // prior trailing blanks, but one is as good as another.
-        syntaxError(Error_Invalid_hex_hexblank, new_integer(length));
-    }
-    // check the size of the last group and make sure it is not odd.
-    else if (!firstGroup && (groupCount & 1) != 0)
-    {
-        syntaxError(Error_Invalid_hex_invhex_group);
+        inPointer--;                        // step the input position
     }
 
     // second scan is to create the string value determined by the
@@ -606,15 +584,13 @@ RexxString* LanguageParser::packBinaryLiteral(size_t start, size_t length)
     // our count of bit characters we find...we can calculate the result length from this
     int bitCount = 0;
     // a pointer for scanning the data
-    // scanning right-to-left makes it easier to identify correct whitepace positioning
+    // scanning right-to-left makes it easier to identify correct whitespace positioning
     const char *inPointer = current + start + length - 1;
 
-    /* first scan is to check REXX rules for validity of grouping             */
-    /* and to remove blanks                                                   */
+    // update the current clause location in case there are any errors
+    clauseLocation = clause->getLocation();
 
-    // this is our counter of the packed string length.  We only count
-    // the characters that get packed.
-    size_t packedlength = length;
+    // first scan is to check REXX rules for validity of grouping
 
     // scan the entire input string from right to left
     for (size_t i = length; i > 0; i--)
@@ -623,12 +599,10 @@ RexxString* LanguageParser::packBinaryLiteral(size_t start, size_t length)
         if (*inPointer == ' ' || *inPointer == '\t')
         {
             // now check to see if this is in a valid position.  We do not allow
-            // blanks at the end of the string, and blanks must appear at even
-            // nibble (4 bit) boundaries.
-            if (i == length)              // this is the test for the end
+            // blanks at the start or the end of the string, and blanks may
+            // only appear at 4-bit boundaries.
+            if (i == 1 || i == length) // no blank at string start or end
             {
-                // update the error information
-                clauseLocation = clause->getLocation();
                 syntaxError(Error_Invalid_hex_binblank, new_integer(i));
 
             }
@@ -653,19 +627,6 @@ RexxString* LanguageParser::packBinaryLiteral(size_t start, size_t length)
 
         inPointer--;                        // step the input position
     }
-
-    // now we need to check for leading blanks.  If our last group count is
-    // now zero, which means we've not seen a real character since our last
-    // blank character.  This means leading blanks!  Since we scan backwards,
-    // the last seen group can have an odd number.
-
-    if (groupCount == 0)
-    {
-        // report this at the first position...there might be
-        // more leading blanks, but one is as good as another.
-        syntaxError(Error_Invalid_hex_binblank, new_integer(1));
-    }
-
 
     // second scan is to create the string value determined by the
     // hex constant.
@@ -770,7 +731,7 @@ RexxToken *LanguageParser::sourceNextToken(RexxToken *previous )
         SourceLocation location;
         // record a starting location.
         startLocation(location);
-        // record this as just a single characters by default
+        // record this as just a single character by default
         location.adjustEnd(1);
 
         // hit the end of the file while scanning for the next token?  Return nothing
@@ -792,11 +753,11 @@ RexxToken *LanguageParser::sourceNextToken(RexxToken *previous )
         // we have what should be a significant blank character
         else if (tokenClass == SIGNIFICANT_BLANK )
         {
-            // ok, this is possibly a significant blanks, so scan ahead to the
+            // ok, this is possibly a significant blank, so scan ahead to the
             // next real token, ignoring the possibility of additional blanks.
             tokenClass = locateToken(inch, false);
 
-            // in order for this blank to be truely significant, the next token
+            // in order for this blank to be truly significant, the next token
             // needs to be the start of a symbol, the start of a quoted literal,
             // or a paren or square bracket.
             if ((tokenClass == NORMAL_CHAR && isSymbolCharacter(inch)) ||
@@ -941,7 +902,7 @@ RexxToken *LanguageParser::sourceNextToken(RexxToken *previous )
                         // two slashes is a special operator
                         if (nextSpecial('/', location))
                         {
-                            // remainder operatior
+                            // remainder operator
                             CHECK_ASSIGNMENT(REMAINDER);
                         }
                         // normal division
@@ -1208,8 +1169,8 @@ RexxToken *LanguageParser::sourceNextToken(RexxToken *previous )
                         clause->setEnd(lineNumber, lineOffset);
                         // update the error information
                         clauseLocation = clause->getLocation();
-                        sprintf(badchar, "%c", inch);
-                        sprintf(hexbadchar, "%2.2X", inch);
+                        snprintf(badchar, sizeof(badchar), "%c", inch);
+                        snprintf(hexbadchar, sizeof(hexbadchar), "%2.2X", inch);
                         // report the error with the invalid character displayed normally and in hex.
                         syntaxError(Error_Invalid_character_char, new_string(badchar), new_string(hexbadchar));
                         break;
@@ -1248,7 +1209,7 @@ RexxToken *LanguageParser::scanSymbol()
 
     // we're in a clean scan state now
     SymbolScanState state = EXP_START;
-    size_t eoffset = 0;                   // position of expoential sign for backing up.
+    size_t eoffset = 0;                   // position of exponential sign for backing up.
     size_t start = lineOffset;            // remember token start position
     int dotCount = 0;                     // no periods yet
 
@@ -1651,7 +1612,7 @@ RexxToken *LanguageParser::scanLiteral()
             // update the error information
             clauseLocation = clause->getLocation();
 
-            // we have different errors depending on the type of delimier
+            // we have different errors depending on the type of delimiter
             if (literalDelimiter == '\'')
             {
                 syntaxError(Error_Unmatched_quote_single);
@@ -1770,7 +1731,7 @@ RexxToken *LanguageParser::scanLiteral()
                 inch = getChar(j);
                 if (inch == literalDelimiter)
                 {
-                    // just step one extra character for the doubleds.
+                    // just step one extra character for the doubles.
                     j++;
                 }
                 value->putChar(i, inch);
@@ -1915,7 +1876,7 @@ StringSymbolType LanguageParser::scanSymbol(RexxString *string)
                 return STRING_NUMERIC;
             }
 
-            // found a potential exponent.  If the next characater is
+            // found a potential exponent.  If the next character is
             // "+" or "-", we already validated everything past that point
             if (Utilities::toUpper(*scan) == 'E')
             {

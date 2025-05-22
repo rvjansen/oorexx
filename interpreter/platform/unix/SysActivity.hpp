@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2021 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2024 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -48,45 +48,38 @@
 # include "config.h"
 #endif
 
-#if defined( HAVE_PTHREAD_H )
-# include <pthread.h>
+#include <pthread.h>
+// FreeBSD, OpenBSD, DragonFly
+#if defined( HAVE_PTHREAD_NP_H )
+# include <pthread_np.h>
 #endif
 
 #include <memory.h>
-
-#if defined( HAVE_SYS_SCHED_H )
-# include <sys/sched.h>
-#endif
-
-#if defined( HAVE_TIME_H )
-# include <time.h>
-#endif
-
-#if defined( HAVE_SCHED_H )
-# include <sched.h>
-#endif
-
+#include <time.h>
 #include <utime.h>
+
 
 class Activity;
 
 class SysActivity
 {
 public:
-    inline SysActivity() : threadId(0) { }
-    inline bool equals(thread_id_t t) { return threadId == t; }
+    inline SysActivity() : valid(false) { }
+    inline bool equals(thread_id_t t) { return pthread_equal(threadId, t); }
     void create(Activity *activity, size_t stackSize);
     void close();
     void useCurrentThread();
-    char *getStackBase(int32_t *base, size_t stackSize);
     void setPriority(int p);
     bool validateThread();
     inline thread_id_t getThreadID() { return (thread_id_t)threadId; }
 
     static thread_id_t queryThreadID();
+    static char* getStackBase();
+    static size_t getStackSize();
 
 protected:
-    pthread_t     threadId;         // the thread identifier
+    bool          valid;      // indicates whether opaque threadId is valid
+    pthread_t     threadId;   // the thread identifier
 };
 
 #endif

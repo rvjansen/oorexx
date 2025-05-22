@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2020 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -579,7 +579,7 @@ void LanguageParser::liveGeneral(MarkReason reason)
  * Generate a method object from a source collection.
  *
  * @param sourceContext
- *               An optional source context used to add additional visibilty to
+ *               An optional source context used to add additional visibility to
  *               dynamically generated methods.
  *
  * @return A method object represented by the leading code block
@@ -613,7 +613,7 @@ MethodClass *LanguageParser::generateMethod(PackageClass *sourceContext)
  * Generate a routine object from a source collection.
  *
  * @param sourceContext
- *               An optional source context used to add additional visibilty to
+ *               An optional source context used to add additional visibility to
  *               dynamically generated methods.
  *
  * @return A routine object represented by the leading code
@@ -693,7 +693,7 @@ RexxCode *LanguageParser::translateInterpret(PackageClass *sourceContext, String
     // context is visible during the install processing.
     package->inheritPackageContext(sourceContext);
 
-    //. the package ends up with neither a init section or a main executable.
+    // the package ends up with neither an init section or a main executable.
     // we just return the main code section
     // return the main executable.
     return mainSection;
@@ -868,7 +868,7 @@ StackFrameClass *LanguageParser::createStackFrame()
     RexxString *traceback = package->traceBack(OREF_NULL, clauseLocation, 0, true);
     ProtectedObject p(traceback);
     return new StackFrameClass(StackFrameClass::FRAME_COMPILE, package->programName, OREF_NULL,
-        OREF_NULL, OREF_NULL, traceback, clauseLocation.getLineNumber());
+        OREF_NULL, OREF_NULL, traceback, clauseLocation.getLineNumber(), 0, OREF_NULL);
 }
 
 
@@ -1213,6 +1213,30 @@ RexxCode *LanguageParser::translateBlock()
             {
                 break;
             }
+
+            // labels are not allowed within DO/LOOP/IF/SELECT groups
+            InstructionKeyword type = topDo()->getType();
+            // We are
+            // - inside a DO, if top isControl, i. e. KEYWORD_LOOP_* or _DO_*
+            // - inside a SELECT if top is KEYWORD_SELECT / SELECT_CASE / WHENTHEN / ENDWHEN / OTHERWISE
+            // - inside an IF if top is IFTHEN or KEYWORD_ELSE
+            //   If ENDTHEN is at the top this is somewhat special.  In this case
+            //   this label here may be preceding an ELSE (so we are inside the IF)
+            //   or something else (meaning we're just outside the IF block).
+            //   We handle this in the KEYWORD_ELSE path below.
+            bool withinIf = type == KEYWORD_IFTHEN || type == KEYWORD_ELSE;
+            bool withinSelect = type == KEYWORD_SELECT || type == KEYWORD_SELECT_CASE ||
+                                type == KEYWORD_WHENTHEN || type == KEYWORD_ENDWHEN || type == KEYWORD_OTHERWISE;
+            if (topDo()->isControl() || withinIf || withinSelect)
+            {
+                // get our label name
+                resetPosition(1); // firstToken() won't do ..
+                RexxToken *token = nextReal();
+                syntaxError(
+                    withinIf ? Error_Unexpected_label_if :
+                    (withinSelect ? Error_Unexpected_label_select :
+                    Error_Unexpected_label_do), token);
+            }
             // append the label and try again
             addClause(instruction);
             nextClause();
@@ -1249,7 +1273,7 @@ RexxCode *LanguageParser::translateBlock()
         // if this is not an ELSE, we might have a pending THEN to finish.
         if (type != KEYWORD_ELSE)
         {
-            // get the type at the type of the stack.
+            // get the type at the top of the stack.
             InstructionKeyword controltype = topDoType();
             // we might need to pop off multiple pending thens while end of an IF or WHEN
             while (controltype == KEYWORD_ENDTHEN || controltype == KEYWORD_ENDWHEN)
@@ -1395,6 +1419,14 @@ RexxCode *LanguageParser::translateBlock()
                     syntaxError(Error_Unexpected_then_else);
                 }
 
+                // no label is allowed immediately before the ELSE keyword
+                if (lastInstruction->isType(KEYWORD_LABEL))
+                {
+                    // unfortunately the label name isn't readily available
+                    // probably a rare error .. just use "ELSE" as message insert
+                    syntaxError(Error_Unexpected_label_if, new_string("ELSE"));
+                }
+
                 // ok, add the ELSE to the instruction list, pop the
                 // THEN off of the control stack, push the ELSE on to the stack,
                 // and hook them together.  The ELSE will need to be completed
@@ -1464,7 +1496,7 @@ RexxCode *LanguageParser::translateBlock()
                 break;
             }
 
-                // An END instruction.  This could the the closure for a DO, LOOP, or SELECT.
+                // An END instruction.  This could be the closure for a DO, LOOP, or SELECT.
                 // its matchup should be on the top of the control stack.
             case  KEYWORD_END:
             {
@@ -1504,7 +1536,7 @@ RexxCode *LanguageParser::translateBlock()
                     second = popDo();
                 }
 
-                // Now do the apprpriate closure action based on the instruction type.
+                // Now do the appropriate closure action based on the instruction type.
                 if (type == KEYWORD_SELECT || type == KEYWORD_SELECT_CASE)
                 {
                     ((RexxInstructionSelect *)second)->matchEnd((RexxInstructionEnd *)instruction, this);
@@ -1678,8 +1710,8 @@ void LanguageParser::resolveCalls()
 
 
 /**
- * Translate a expression of REXX code on a directive (already
- * have an active clause, not not translating a block
+ * Translate an expression of REXX code on a directive (already
+ * have an active clause, not translating a block
  * yet)
  *
  * @param token  The left paren delimiter for the expression. Required for error reporting.
@@ -1779,7 +1811,7 @@ void LanguageParser::resolveDependencies()
             currentClass->addDependencies(classDependencies);
         }
 
-        // get a array for handling the ordering
+        // get an array for handling the ordering
         ArrayClass *classOrder = new_array(classCount);
         ProtectedObject p2(classOrder);
 
@@ -1921,7 +1953,7 @@ void LanguageParser::flushControl(RexxInstruction *instruction)
             }
             // we need a new end marker
             second = endIfNew((RexxInstructionIf *)second);
-            // we add this clause behine the new one, and also add this
+            // we add this clause behind the new one, and also add this
             // to the control stack as a pending instruction
             addClause(second);
             pushDo(second);
@@ -1959,8 +1991,7 @@ bool LanguageParser::isExposed(RexxString *varName)
     {
         return exposedVariables->hasIndex(varName);
     }
-    // had a USE ARG instruction specified?  Variable is exposed
-
+    // did we have a USE LOCAL instruction specified?  Variable is exposed
     else if (localVariables != OREF_NULL)
     {
         return !localVariables->hasIndex(varName);
@@ -2031,14 +2062,10 @@ RexxVariableBase *LanguageParser::addSimpleVariable(RexxString *varname)
         // and add this to the table.
         variables->put(retriever, varname);
     }
-    // Small optimization here.  In order for a variable to be added to the
-    // guard variable list, it must have been exposed already.  That means
-    // the variable will already be in this table, so we don't need to
-    // perform the capturing test then.
-    else
-    {
-        captureGuardVariable(varname, retriever);
-    }
+    // we need to always perform the capturing test because we allow e. g.
+    // USE LOCAL; GUARD ON/OFF WHEN v > 0
+    captureGuardVariable(varname, retriever);
+
     // return the variable accesser, either a new one or one pulled from the cache.
     return retriever;
 }
@@ -2072,15 +2099,12 @@ RexxStemVariable *LanguageParser::addStem(RexxString *stemName)
         }
         variables->put(retriever, stemName);
     }
-    // Small optimization here.  In order for a variable to be added to the
-    // guard variable list, it must have been exposed already.  That means
-    // the variable will already be in this table, so we don't need to
-    // perform the capturing test then.
-    else
-    {
-        captureGuardVariable(stemName, retriever);
-    }
-    return retriever;                    /* return variable accesser          */
+    // we need to always perform the capturing test because we allow e. g.
+    // USE LOCAL; GUARD ON/OFF WHEN v > 0
+    captureGuardVariable(stemName, retriever);
+
+    // return variable accesser
+    return retriever;
 }
 
 
@@ -2176,7 +2200,7 @@ RexxCompoundVariable *LanguageParser::addCompound(RexxString *name)
     // variables table for this.
     variables->put(retriever, name);
 
-    // NOTE: compound variables do get get added to the guard list.
+    // NOTE: compound variables do get added to the guard list.
     return retriever;
 }
 
@@ -2210,7 +2234,6 @@ void LanguageParser::autoExpose()
     localVariables->put(GlobalNames::RC, GlobalNames::RC);
     localVariables->put(GlobalNames::RESULT, GlobalNames::RESULT);
     localVariables->put(GlobalNames::SIGL, GlobalNames::SIGL);
-
 }
 
 
@@ -2222,7 +2245,6 @@ void LanguageParser::autoExpose()
  */
 void LanguageParser::localVariable(RexxString *name )
 {
-
     localVariables->put(name, name);
 }
 
@@ -2526,7 +2548,7 @@ void LanguageParser::addClause(RexxInstruction *instruction)
 
 /**
  * Add a label to our global table.  Note, in Rexx it is
- * not an error to have duplicate labels, but ony the
+ * not an error to have duplicate labels, but only the
  * first can be used as a target.  We do not overwrite
  * a given name if it is already in the table.
  *
@@ -2605,7 +2627,7 @@ ArrayClass *LanguageParser::getGuard()
  */
 RexxInternalObject *LanguageParser::parseConstantExpression()
 {
-    // everthing keys off of the first token.
+    // everything keys off of the first token.
     RexxToken *token = nextReal();
     // just a literal token?
     if (token->isLiteral())              /* literal string expression?        */
@@ -3287,7 +3309,7 @@ RexxInternalObject *LanguageParser::parseCollectionMessage(RexxToken *token, Rex
     ProtectedObject p(target);
 
     // get the arguments.  Like with builtin function calls, we just ignore any
-    // prior terminator context and rely on the fact that the brackes must match.
+    // prior terminator context and rely on the fact that the brackets must match.
     size_t argCount = parseArgList(token, (TERM_SQRIGHT));
 
     // create the message item.
@@ -3334,7 +3356,7 @@ RexxToken  *LanguageParser::getToken(int terminators, RexxErrorCodes errorcode)
  *
  * @param target The target object term for the message send.
  * @param doubleTilde
- *               Indicates whether this is the "~" or "~~" form of operatior.
+ *               Indicates whether this is the "~" or "~~" form of operation.
  * @param terminators
  *               Expression terminators.
  *
@@ -3632,7 +3654,7 @@ RexxInternalObject* LanguageParser::parseMessageSubterm(int terminators)
                 return new RexxUnaryOperator(token->subtype(), term);
                 break;
             }
-                // not a aperator in the normal sense, but > or as a prefix creates
+                // not an operator in the normal sense, but > or as a prefix creates
                 // a variable reference.
             case OPERATOR_LESSTHAN:
             case OPERATOR_GREATERTHAN:
@@ -3672,7 +3694,7 @@ RexxInternalObject* LanguageParser::parseMessageSubterm(int terminators)
             }
             else
             {
-                term = parseMessage(term, token->isType(TOKEN_DTILDE), terminators);
+                term = parseMessage(term, token->isType(TOKEN_DTILDE), TERM_EOC);
             }
             popTerm();
             pushTerm(term);
@@ -3761,7 +3783,7 @@ RexxInternalObject* LanguageParser::parseSubTerm(int terminators)
             {
                 syntaxError(Error_Invalid_expression_general, token);
             }
-            // this had better been terminated by a righ paren.
+            // this had better been terminated by a right paren.
             if (!nextToken()->isRightParen())
             {
                 syntaxErrorAt(Error_Unmatched_parenthesis_paren, token);
@@ -4123,7 +4145,7 @@ void LanguageParser::error(RexxErrorCodes errorcode, RexxObject *value )
  *
  * @param errorcode The error number to issue.
  * @param value1    The first substitution object.
- * @param value2    The second substitution objec.t
+ * @param value2    The second substitution object.
  */
 void LanguageParser::error(RexxErrorCodes errorcode, RexxObject *value1, RexxObject *value2 )
 {
@@ -4136,8 +4158,8 @@ void LanguageParser::error(RexxErrorCodes errorcode, RexxObject *value1, RexxObj
  *
  * @param errorcode The error number to issue.
  * @param value1    The first substitution object.
- * @param value2    The second substitution objec.t
- * @param value3    The third substitution objec.t
+ * @param value2    The second substitution object.
+ * @param value3    The third substitution object.
  */
 void LanguageParser::error(RexxErrorCodes errorcode, RexxObject *value1, RexxObject *value2, RexxObject *value3 )
 {

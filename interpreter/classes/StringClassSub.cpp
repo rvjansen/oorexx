@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /* Copyright (c) 1995, 2004 IBM Corporation. All rights reserved.             */
-/* Copyright (c) 2005-2019 Rexx Language Association. All rights reserved.    */
+/* Copyright (c) 2005-2025 Rexx Language Association. All rights reserved.    */
 /*                                                                            */
 /* This program and the accompanying materials are made available under       */
 /* the terms of the Common Public License v1.0 which accompanies this         */
@@ -459,7 +459,12 @@ RexxString *RexxString::reverse()
     // now perform the whole length copy
     while (length--)
     {
+// avoid GCC warning: writing 1 byte into a region of size 0 [-Wstringop-overflow=]
+// (or similar) in gcc 10 and above, due to our RexxString char stringData[4]
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
         *string++ = *end--;
+#pragma GCC diagnostic pop
     }
 
     return retval;
