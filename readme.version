@@ -1,17 +1,7 @@
-When changing the version number of ooRexx you will need to change the following files:
+# DEPRECATED
 
-oorexx.ver
-configure.ac
-CHANGES
-ReleaseNotes
-api/oorexxapi.h                         (REXX_INTERPRETER_5_x_x)
-extensions/rxftp/rxftp.cls
-platform/unix/rexx.1
-platform/unix/rexxc.1
-platform/unix/rxqueue.1
-platform/unix/rxsubcom.1
+This repo has been moved to https://github.com/RexxLA/oorexx where the whole history of the Subversion repository is 
+accessible and which is being synced on a daily basis.
 
-When the library interface changes you need to modify the oorexx.ver
-file. BE CAREFUL! Some of this info has no relationship to the ooRexx package
-version! If you don't know what you are doing, then don't do anything!
+Please stop using this repository as it will be removed somewhere in August 2025.
 
